@@ -1,1 +1,0 @@
-ci: GitHub Actions — ruff lint/format + pytest (postgres service) + Docker build
