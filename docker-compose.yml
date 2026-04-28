@@ -1,0 +1,33 @@
+services:
+  api:
+    build: .
+    container_name: beberehber-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app/app
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    container_name: beberehber-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-beberehber}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-beberehber}
+      POSTGRES_DB: ${POSTGRES_DB:-beberehber}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-beberehber}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
