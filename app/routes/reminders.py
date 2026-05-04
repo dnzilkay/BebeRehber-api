@@ -100,9 +100,7 @@ def update_reminder(
     data = payload.model_dump(exclude_unset=True)
     if "completed" in data:
         completed = data.pop("completed")
-        reminder.completed_at = (
-            datetime.now(timezone.utc) if completed else None
-        )
+        reminder.completed_at = datetime.now(timezone.utc) if completed else None
     for field, value in data.items():
         if field == "title" and isinstance(value, str):
             value = value.strip()

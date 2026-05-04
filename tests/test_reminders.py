@@ -155,7 +155,5 @@ def test_delete_reminder(client):
         },
     ).json()
 
-    res = client.delete(
-        f"/babies/{baby['id']}/reminders/{r['id']}", headers=h
-    )
+    res = client.delete(f"/babies/{baby['id']}/reminders/{r['id']}", headers=h)
     assert res.status_code == 204

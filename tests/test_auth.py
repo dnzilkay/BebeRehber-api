@@ -1,4 +1,6 @@
-def register_user(client, email="test@example.com", password="StrongPass1", name="Test"):
+def register_user(
+    client, email="test@example.com", password="StrongPass1", name="Test"
+):
     return client.post(
         "/auth/register",
         json={"email": email, "password": password, "name": name},

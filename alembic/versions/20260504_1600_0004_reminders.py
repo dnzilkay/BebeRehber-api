@@ -55,9 +55,7 @@ def upgrade() -> None:
         op.f("ix_reminders_baby_id"), "reminders", ["baby_id"], unique=False
     )
     op.create_index(op.f("ix_reminders_kind"), "reminders", ["kind"], unique=False)
-    op.create_index(
-        op.f("ix_reminders_due_at"), "reminders", ["due_at"], unique=False
-    )
+    op.create_index(op.f("ix_reminders_due_at"), "reminders", ["due_at"], unique=False)
 
 
 def downgrade() -> None:

@@ -65,9 +65,7 @@ def upgrade() -> None:
     op.create_index(
         op.f("ix_care_logs_baby_id"), "care_logs", ["baby_id"], unique=False
     )
-    op.create_index(
-        op.f("ix_care_logs_kind"), "care_logs", ["kind"], unique=False
-    )
+    op.create_index(op.f("ix_care_logs_kind"), "care_logs", ["kind"], unique=False)
     op.create_index(
         op.f("ix_care_logs_started_at"),
         "care_logs",

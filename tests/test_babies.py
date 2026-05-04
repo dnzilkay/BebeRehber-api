@@ -1,4 +1,6 @@
-def auth_headers(client, email="parent@example.com", password="StrongPass1", name="Parent"):
+def auth_headers(
+    client, email="parent@example.com", password="StrongPass1", name="Parent"
+):
     res = client.post(
         "/auth/register",
         json={"email": email, "password": password, "name": name},
