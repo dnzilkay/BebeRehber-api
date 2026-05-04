@@ -139,15 +139,11 @@ def test_list_filters_by_kind(client):
         },
     )
 
-    feeds = client.get(
-        f"/babies/{baby['id']}/care-logs?kind=feeding", headers=h
-    ).json()
+    feeds = client.get(f"/babies/{baby['id']}/care-logs?kind=feeding", headers=h).json()
     assert len(feeds) == 1
     assert feeds[0]["kind"] == "feeding"
 
-    sleeps = client.get(
-        f"/babies/{baby['id']}/care-logs?kind=sleep", headers=h
-    ).json()
+    sleeps = client.get(f"/babies/{baby['id']}/care-logs?kind=sleep", headers=h).json()
     assert len(sleeps) == 1
 
 
@@ -211,7 +207,5 @@ def test_delete_log(client):
         },
     ).json()
 
-    res = client.delete(
-        f"/babies/{baby['id']}/care-logs/{created['id']}", headers=h
-    )
+    res = client.delete(f"/babies/{baby['id']}/care-logs/{created['id']}", headers=h)
     assert res.status_code == 204
