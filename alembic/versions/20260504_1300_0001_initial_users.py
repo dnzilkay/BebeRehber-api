@@ -20,11 +20,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    user_plan = sa.Enum("free", "premium", name="user_plan")
-    user_role = sa.Enum("user", "admin", name="user_role")
-    user_plan.create(op.get_bind(), checkfirst=True)
-    user_role.create(op.get_bind(), checkfirst=True)
-
     op.create_table(
         "users",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -33,13 +28,25 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=120), nullable=False),
         sa.Column(
             "plan",
-            sa.Enum("free", "premium", name="user_plan", create_type=False),
+            sa.Enum(
+                "free",
+                "premium",
+                name="user_plan",
+                native_enum=False,
+                length=16,
+            ),
             nullable=False,
             server_default="free",
         ),
         sa.Column(
             "role",
-            sa.Enum("user", "admin", name="user_role", create_type=False),
+            sa.Enum(
+                "user",
+                "admin",
+                name="user_role",
+                native_enum=False,
+                length=16,
+            ),
             nullable=False,
             server_default="user",
         ),
@@ -71,5 +78,3 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_users_email"), table_name="users")
     op.drop_index(op.f("ix_users_id"), table_name="users")
     op.drop_table("users")
-    sa.Enum(name="user_role").drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name="user_plan").drop(op.get_bind(), checkfirst=True)
