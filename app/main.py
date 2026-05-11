@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routes import auth, babies, care_logs, health, reminders
+from app.routes import auth, babies, care_logs, health, milestones, reminders
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -22,6 +22,7 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(babies.router)
 app.include_router(care_logs.router)
+app.include_router(milestones.router)
 app.include_router(reminders.router)
 
 
