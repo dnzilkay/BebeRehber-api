@@ -84,14 +84,10 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["post_id"], ["community_posts.id"], ondelete="CASCADE"
         ),
-        sa.ForeignKeyConstraint(
-            ["author_id"], ["users.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["author_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_community_comments_id"), "community_comments", ["id"]
-    )
+    op.create_index(op.f("ix_community_comments_id"), "community_comments", ["id"])
     op.create_index(
         op.f("ix_community_comments_post_id"),
         "community_comments",

@@ -47,9 +47,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["baby_id"], ["babies.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "baby_id", "user_id", name="uq_baby_member_baby_user"
-        ),
+        sa.UniqueConstraint("baby_id", "user_id", name="uq_baby_member_baby_user"),
     )
     op.create_index(op.f("ix_baby_members_id"), "baby_members", ["id"])
     op.create_index(op.f("ix_baby_members_baby_id"), "baby_members", ["baby_id"])
@@ -74,9 +72,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["created_by_user_id"], ["users.id"], ondelete="CASCADE"
         ),
-        sa.ForeignKeyConstraint(
-            ["used_by_user_id"], ["users.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["used_by_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("token", name="uq_baby_invite_token"),
     )
