@@ -13,6 +13,14 @@ class Settings(BaseSettings):
 
     BACKEND_CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
+    # MinIO object storage
+    MINIO_ENDPOINT: str = "minio:9000"
+    MINIO_ACCESS_KEY: str = "beberehber"
+    MINIO_SECRET_KEY: str = "beberehber123"
+    MINIO_BUCKET: str = "beberehber-media"
+    MINIO_PUBLIC_URL: str = "http://localhost:9000"
+    MINIO_USE_SSL: bool = False
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property

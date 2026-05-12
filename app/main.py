@@ -2,7 +2,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routes import auth, babies, care_logs, health, milestones, reminders
+from app.routes import (
+    albums,
+    auth,
+    babies,
+    care_logs,
+    health,
+    journal_entries,
+    media,
+    milestones,
+    reminders,
+)
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -24,6 +34,9 @@ app.include_router(babies.router)
 app.include_router(care_logs.router)
 app.include_router(milestones.router)
 app.include_router(reminders.router)
+app.include_router(albums.router)
+app.include_router(journal_entries.router)
+app.include_router(media.router)
 
 
 @app.get("/")
