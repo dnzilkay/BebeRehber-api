@@ -3,14 +3,20 @@
 import sys
 
 from app.core.database import SessionLocal
-from app.core.seed import seed_demo_users
+from app.core.seed import seed_demo_data, seed_demo_users
 
 
 def cmd_seed() -> None:
     db = SessionLocal()
     try:
-        created = seed_demo_users(db)
-        print(f"seed: {created} demo user(s) created.")
+        new_users = seed_demo_users(db)
+        print(f"seed: {new_users} demo user(s) created.")
+        stats = seed_demo_data(db)
+        non_zero = {k: v for k, v in stats.items() if v}
+        if non_zero:
+            print(f"seed: demo data created — {non_zero}")
+        else:
+            print("seed: demo data already in place.")
     finally:
         db.close()
 
