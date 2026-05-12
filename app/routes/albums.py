@@ -3,6 +3,7 @@ from sqlalchemy import func, select
 
 from app.core import storage
 from app.core.deps import CurrentUser, DbSession
+from app.core.limits import FREE_MAX_ALBUMS, is_premium
 from app.models.album import Album
 from app.models.baby import Baby
 from app.models.journal_entry import JournalEntry
@@ -77,6 +78,20 @@ def create_album(
     db: DbSession,
 ) -> AlbumOut:
     _ensure_owned_baby(db, current_user.id, baby_id)
+
+    # Free pakette en fazla FREE_MAX_ALBUMS albüm
+    if not is_premium(current_user):
+        existing = (
+            db.scalar(select(func.count(Album.id)).where(Album.baby_id == baby_id)) or 0
+        )
+        if existing >= FREE_MAX_ALBUMS:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"Free pakette en fazla {FREE_MAX_ALBUMS} albüm "
+                    "oluşturabilirsin. Sınırsız albüm için Premium'a geç."
+                ),
+            )
 
     album = Album(baby_id=baby_id, name=payload.name.strip())
     db.add(album)
