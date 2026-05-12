@@ -25,7 +25,13 @@ class MediaAsset(Base):
     )
     object_key: Mapped[str] = mapped_column(String(500), nullable=False)
     kind: Mapped[MediaKind] = mapped_column(
-        SAEnum(MediaKind, name="media_kind", native_enum=False, length=8),
+        SAEnum(
+            MediaKind,
+            name="media_kind",
+            native_enum=False,
+            length=8,
+            values_callable=lambda e: [m.value for m in e],
+        ),
         nullable=False,
     )
     content_type: Mapped[str] = mapped_column(String(80), nullable=False)

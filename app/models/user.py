@@ -29,12 +29,24 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     plan: Mapped[UserPlan] = mapped_column(
-        SAEnum(UserPlan, name="user_plan", native_enum=False, length=16),
+        SAEnum(
+            UserPlan,
+            name="user_plan",
+            native_enum=False,
+            length=16,
+            values_callable=lambda e: [m.value for m in e],
+        ),
         default=UserPlan.FREE,
         nullable=False,
     )
     role: Mapped[UserRole] = mapped_column(
-        SAEnum(UserRole, name="user_role", native_enum=False, length=16),
+        SAEnum(
+            UserRole,
+            name="user_role",
+            native_enum=False,
+            length=16,
+            values_callable=lambda e: [m.value for m in e],
+        ),
         default=UserRole.USER,
         nullable=False,
     )
