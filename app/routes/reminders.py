@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
+from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
-from app.models.baby import Baby
 from app.models.reminder import Reminder, ReminderKind
 from app.schemas.reminder import ReminderCreate, ReminderOut, ReminderUpdate
 
@@ -12,17 +12,8 @@ from app.schemas.reminder import ReminderCreate, ReminderOut, ReminderUpdate
 router = APIRouter(prefix="/babies/{baby_id}/reminders", tags=["reminders"])
 
 
-def _ensure_owned_baby(db, user_id: int, baby_id: int) -> None:
-    baby = db.get(Baby, baby_id)
-    if baby is None or baby.owner_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Bebek bulunamadı.",
-        )
-
-
 def _get_owned_reminder(db, user_id: int, baby_id: int, rid: int) -> Reminder:
-    _ensure_owned_baby(db, user_id, baby_id)
+    ensure_baby_access(db, user_id, baby_id)
     reminder = db.get(Reminder, rid)
     if reminder is None or reminder.baby_id != baby_id:
         raise HTTPException(
@@ -44,7 +35,7 @@ def list_reminders(
     upcoming: bool = Query(default=False, description="Sadece tamamlanmamış"),
     kind: ReminderKind | None = Query(default=None),
 ) -> list[Reminder]:
-    _ensure_owned_baby(db, current_user.id, baby_id)
+    ensure_baby_access(db, current_user.id, baby_id)
 
     stmt = select(Reminder).where(Reminder.baby_id == baby_id)
     if upcoming:
@@ -68,7 +59,7 @@ def create_reminder(
     current_user: CurrentUser,
     db: DbSession,
 ) -> Reminder:
-    _ensure_owned_baby(db, current_user.id, baby_id)
+    ensure_baby_access(db, current_user.id, baby_id)
 
     reminder = Reminder(
         baby_id=baby_id,

@@ -13,6 +13,9 @@ class Settings(BaseSettings):
 
     BACKEND_CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
+    # Davet linkleri için frontend tabanı
+    FRONTEND_URL: str = "http://localhost:3000"
+
     # MinIO object storage
     MINIO_ENDPOINT: str = "minio:9000"
     MINIO_ACCESS_KEY: str = "beberehber"

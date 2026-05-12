@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
+from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
-from app.models.baby import Baby
 from app.models.milestone import Milestone, MilestoneCategory
 from app.schemas.milestone import MilestoneCreate, MilestoneOut, MilestoneUpdate
 
@@ -10,17 +10,8 @@ from app.schemas.milestone import MilestoneCreate, MilestoneOut, MilestoneUpdate
 router = APIRouter(prefix="/babies/{baby_id}/milestones", tags=["milestones"])
 
 
-def _ensure_owned_baby(db, user_id: int, baby_id: int) -> None:
-    baby = db.get(Baby, baby_id)
-    if baby is None or baby.owner_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Bebek bulunamadı.",
-        )
-
-
 def _get_owned_milestone(db, user_id: int, baby_id: int, mid: int) -> Milestone:
-    _ensure_owned_baby(db, user_id, baby_id)
+    ensure_baby_access(db, user_id, baby_id)
     milestone = db.get(Milestone, mid)
     if milestone is None or milestone.baby_id != baby_id:
         raise HTTPException(
@@ -42,7 +33,7 @@ def list_milestones(
     category: MilestoneCategory | None = Query(default=None),
     limit: int | None = Query(default=None, ge=1, le=200),
 ) -> list[Milestone]:
-    _ensure_owned_baby(db, current_user.id, baby_id)
+    ensure_baby_access(db, current_user.id, baby_id)
 
     stmt = select(Milestone).where(Milestone.baby_id == baby_id)
     if category is not None:
@@ -66,7 +57,7 @@ def create_milestone(
     current_user: CurrentUser,
     db: DbSession,
 ) -> Milestone:
-    _ensure_owned_baby(db, current_user.id, baby_id)
+    ensure_baby_access(db, current_user.id, baby_id)
 
     milestone = Milestone(
         baby_id=baby_id,

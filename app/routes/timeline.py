@@ -4,10 +4,10 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
 from app.core import storage
+from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
 from app.core.limits import is_premium
 from app.models.album import Album
-from app.models.baby import Baby
 from app.models.journal_entry import JournalEntry
 from app.models.media_asset import MediaAsset
 from app.models.milestone import Milestone
@@ -16,15 +16,6 @@ from app.schemas.timeline import TimelineEntry, TimelineItem, TimelineMilestone
 
 
 router = APIRouter(prefix="/babies/{baby_id}/timeline", tags=["timeline"])
-
-
-def _ensure_owned_baby(db, user_id: int, baby_id: int) -> None:
-    baby = db.get(Baby, baby_id)
-    if baby is None or baby.owner_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Bebek bulunamadı.",
-        )
 
 
 def _media_out(m: MediaAsset) -> MediaAssetOut:
@@ -50,7 +41,7 @@ def get_timeline(
     current_user: CurrentUser,
     db: DbSession,
 ) -> list[TimelineItem]:
-    _ensure_owned_baby(db, current_user.id, baby_id)
+    ensure_baby_access(db, current_user.id, baby_id)
 
     if not is_premium(current_user):
         raise HTTPException(

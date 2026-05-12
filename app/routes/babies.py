@@ -1,34 +1,27 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 from sqlalchemy import select
 
+from app.core.baby_access import ensure_baby_access, ensure_baby_owner
 from app.core.deps import CurrentUser, DbSession
 from app.models.baby import Baby
+from app.models.baby_member import BabyMember, BabyMemberRole
 from app.schemas.baby import BabyCreate, BabyOut, BabyUpdate
 
 
 router = APIRouter(prefix="/babies", tags=["babies"])
 
 
-def _get_owned_baby(db, user_id: int, baby_id: int) -> Baby:
-    baby = db.get(Baby, baby_id)
-    if baby is None or baby.owner_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Bebek bulunamadı.",
-        )
-    return baby
-
-
 @router.get(
     "",
     response_model=list[BabyOut],
-    summary="Mevcut kullanıcının bebek listesi",
+    summary="Kullanıcının erişimi olan tüm bebek profilleri (owner + co-parent)",
 )
 def list_babies(current_user: CurrentUser, db: DbSession) -> list[Baby]:
     rows = (
         db.execute(
             select(Baby)
-            .where(Baby.owner_id == current_user.id)
+            .join(BabyMember, BabyMember.baby_id == Baby.id)
+            .where(BabyMember.user_id == current_user.id)
             .order_by(Baby.created_at.asc())
         )
         .scalars()
@@ -56,6 +49,16 @@ def create_baby(
         avatar_url=payload.avatar_url,
     )
     db.add(baby)
+    db.flush()  # baby.id'yi al
+
+    # Otomatik owner kaydı
+    db.add(
+        BabyMember(
+            baby_id=baby.id,
+            user_id=current_user.id,
+            role=BabyMemberRole.OWNER,
+        )
+    )
     db.commit()
     db.refresh(baby)
     return baby
@@ -71,7 +74,7 @@ def get_baby(
     current_user: CurrentUser,
     db: DbSession,
 ) -> Baby:
-    return _get_owned_baby(db, current_user.id, baby_id)
+    return ensure_baby_access(db, current_user.id, baby_id)
 
 
 @router.patch(
@@ -85,7 +88,7 @@ def update_baby(
     current_user: CurrentUser,
     db: DbSession,
 ) -> Baby:
-    baby = _get_owned_baby(db, current_user.id, baby_id)
+    baby = ensure_baby_access(db, current_user.id, baby_id)
 
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -101,13 +104,13 @@ def update_baby(
 @router.delete(
     "/{baby_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Bebek profilini sil",
+    summary="Bebek profilini sil (owner only)",
 )
 def delete_baby(
     baby_id: int,
     current_user: CurrentUser,
     db: DbSession,
 ) -> None:
-    baby = _get_owned_baby(db, current_user.id, baby_id)
+    baby = ensure_baby_owner(db, current_user.id, baby_id)
     db.delete(baby)
     db.commit()
