@@ -2,9 +2,11 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from sqlalchemy import func, select
 
-from app.core import storage
+from app.core import storage, video
 from app.core.deps import CurrentUser, DbSession
+from app.core.limits import FREE_MAX_MEDIA_PER_ALBUM, is_premium, max_video_seconds
 from app.models.baby import Baby
 from app.models.journal_entry import JournalEntry
 from app.models.media_asset import MediaAsset, MediaKind
@@ -54,6 +56,52 @@ def _media_out(m: MediaAsset) -> MediaAssetOut:
     )
 
 
+def _enforce_album_media_limit(db, entry: JournalEntry, user) -> None:
+    """Free pakette albüm başına en fazla FREE_MAX_MEDIA_PER_ALBUM medya."""
+    if is_premium(user):
+        return
+    if entry.album_id is None:
+        return
+    count = (
+        db.scalar(
+            select(func.count(MediaAsset.id))
+            .join(JournalEntry, MediaAsset.entry_id == JournalEntry.id)
+            .where(JournalEntry.album_id == entry.album_id)
+        )
+        or 0
+    )
+    if count >= FREE_MAX_MEDIA_PER_ALBUM:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Free pakette albüm başına en fazla {FREE_MAX_MEDIA_PER_ALBUM} "
+                "medya yükleyebilirsin. Sınırsız medya için Premium'a geç."
+            ),
+        )
+
+
+def _enforce_video_duration(user, duration_sec: int | None) -> None:
+    if duration_sec is None:
+        # ffprobe yoksa veya parse edilemediyse Free'de güvenli tarafa çek
+        if not is_premium(user):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Video süresi tespit edilemedi; lütfen tekrar dene.",
+            )
+        return
+    limit = max_video_seconds(user)
+    if duration_sec > limit:
+        plan_word = "Premium" if is_premium(user) else "Free"
+        upsell = "" if is_premium(user) else " Daha uzun videolar için Premium'a geç."
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                f"{plan_word} pakette video en fazla {limit} saniye olabilir "
+                f"(yüklenen: {duration_sec} sn).{upsell}"
+            ),
+        )
+
+
 @router.post(
     "",
     response_model=MediaAssetOut,
@@ -79,6 +127,14 @@ async def upload_media(
             detail="Dosya boş.",
         )
 
+    _enforce_album_media_limit(db, entry, current_user)
+
+    duration_sec: int | None = None
+    if kind == MediaKind.VIDEO:
+        suffix = Path(file.filename or "").suffix.lower()
+        duration_sec = video.probe_duration_seconds(data, suffix=suffix)
+        _enforce_video_duration(current_user, duration_sec)
+
     suffix = Path(file.filename or "").suffix.lower()
     object_key = f"journal/{baby_id}/{entry_id}/{uuid.uuid4().hex}{suffix}"
     storage.upload_bytes(object_key, data, content_type)
@@ -89,6 +145,7 @@ async def upload_media(
         kind=kind,
         content_type=content_type,
         size_bytes=len(data),
+        duration_sec=duration_sec,
     )
     db.add(media)
     db.commit()
