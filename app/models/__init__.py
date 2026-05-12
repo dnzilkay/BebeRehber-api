@@ -7,6 +7,7 @@ from app.models.care_log import CareLog
 from app.models.community_comment import CommunityComment
 from app.models.community_post import CommunityPost
 from app.models.journal_entry import JournalEntry
+from app.models.social_post import SocialPost
 from app.models.media_asset import MediaAsset
 from app.models.milestone import Milestone
 from app.models.reminder import Reminder
@@ -26,4 +27,5 @@ __all__ = [
     "MediaAsset",
     "CommunityPost",
     "CommunityComment",
+    "SocialPost",
 ]
