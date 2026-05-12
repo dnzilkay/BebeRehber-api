@@ -2,9 +2,9 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.core import storage
+from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
 from app.models.album import Album
-from app.models.baby import Baby
 from app.models.journal_entry import JournalEntry
 from app.models.media_asset import MediaAsset
 from app.schemas.journal_entry import (
@@ -16,15 +16,6 @@ from app.schemas.media_asset import MediaAssetOut
 
 
 router = APIRouter(prefix="/babies/{baby_id}/entries", tags=["journal-entries"])
-
-
-def _ensure_owned_baby(db, user_id: int, baby_id: int) -> None:
-    baby = db.get(Baby, baby_id)
-    if baby is None or baby.owner_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Bebek bulunamadı.",
-        )
 
 
 def _ensure_album_owned(db, baby_id: int, album_id: int | None) -> None:
@@ -39,7 +30,7 @@ def _ensure_album_owned(db, baby_id: int, album_id: int | None) -> None:
 
 
 def _get_owned_entry(db, user_id: int, baby_id: int, entry_id: int) -> JournalEntry:
-    _ensure_owned_baby(db, user_id, baby_id)
+    ensure_baby_access(db, user_id, baby_id)
     entry = db.get(JournalEntry, entry_id)
     if entry is None or entry.baby_id != baby_id:
         raise HTTPException(
@@ -83,7 +74,7 @@ def list_entries(
     album_id: int | None = Query(default=None),
     limit: int | None = Query(default=None, ge=1, le=500),
 ) -> list[JournalEntryOut]:
-    _ensure_owned_baby(db, current_user.id, baby_id)
+    ensure_baby_access(db, current_user.id, baby_id)
 
     stmt = select(JournalEntry).where(JournalEntry.baby_id == baby_id)
     if album_id is not None:
@@ -111,7 +102,7 @@ def create_entry(
     current_user: CurrentUser,
     db: DbSession,
 ) -> JournalEntryOut:
-    _ensure_owned_baby(db, current_user.id, baby_id)
+    ensure_baby_access(db, current_user.id, baby_id)
     _ensure_album_owned(db, baby_id, payload.album_id)
 
     entry = JournalEntry(

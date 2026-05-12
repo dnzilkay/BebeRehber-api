@@ -5,9 +5,9 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from sqlalchemy import func, select
 
 from app.core import storage, video
+from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
 from app.core.limits import FREE_MAX_MEDIA_PER_ALBUM, is_premium, max_video_seconds
-from app.models.baby import Baby
 from app.models.journal_entry import JournalEntry
 from app.models.media_asset import MediaAsset, MediaKind
 from app.schemas.media_asset import MediaAssetOut
@@ -17,12 +17,7 @@ router = APIRouter(prefix="/babies/{baby_id}/entries/{entry_id}/media", tags=["m
 
 
 def _get_owned_entry(db, user_id: int, baby_id: int, entry_id: int) -> JournalEntry:
-    baby = db.get(Baby, baby_id)
-    if baby is None or baby.owner_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Bebek bulunamadı.",
-        )
+    ensure_baby_access(db, user_id, baby_id)
     entry = db.get(JournalEntry, entry_id)
     if entry is None or entry.baby_id != baby_id:
         raise HTTPException(

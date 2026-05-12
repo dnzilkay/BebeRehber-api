@@ -3,23 +3,13 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
+from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
-from app.models.baby import Baby
 from app.models.care_log import CareKind, CareLog
 from app.schemas.care_log import CareLogCreate, CareLogOut, CareSummary
 
 
 router = APIRouter(prefix="/babies/{baby_id}/care-logs", tags=["care-logs"])
-
-
-def _ensure_owned(db, user_id: int, baby_id: int) -> Baby:
-    baby = db.get(Baby, baby_id)
-    if baby is None or baby.owner_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Bebek bulunamadı.",
-        )
-    return baby
 
 
 @router.get(
@@ -34,7 +24,7 @@ def list_care_logs(
     kind: CareKind | None = Query(default=None),
     days: int = Query(default=7, ge=1, le=365),
 ) -> list[CareLog]:
-    _ensure_owned(db, current_user.id, baby_id)
+    ensure_baby_access(db, current_user.id, baby_id)
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     stmt = (
@@ -61,7 +51,7 @@ def create_care_log(
     current_user: CurrentUser,
     db: DbSession,
 ) -> CareLog:
-    _ensure_owned(db, current_user.id, baby_id)
+    ensure_baby_access(db, current_user.id, baby_id)
 
     log = CareLog(
         baby_id=baby_id,
@@ -89,7 +79,7 @@ def delete_care_log(
     current_user: CurrentUser,
     db: DbSession,
 ) -> None:
-    _ensure_owned(db, current_user.id, baby_id)
+    ensure_baby_access(db, current_user.id, baby_id)
     log = db.get(CareLog, log_id)
     if log is None or log.baby_id != baby_id:
         raise HTTPException(
@@ -111,7 +101,7 @@ def care_summary(
     db: DbSession,
     days: int = Query(default=1, ge=1, le=30),
 ) -> CareSummary:
-    _ensure_owned(db, current_user.id, baby_id)
+    ensure_baby_access(db, current_user.id, baby_id)
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     base = select(CareLog).where(
