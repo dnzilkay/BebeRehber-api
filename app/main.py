@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.routes import (
+    admin,
     albums,
     auth,
     babies,
@@ -46,6 +47,7 @@ app.include_router(export.router)
 app.include_router(baby_members.baby_router)
 app.include_router(baby_members.invites_router)
 app.include_router(community.router)
+app.include_router(admin.router)
 
 
 @app.get("/")

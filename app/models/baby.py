@@ -3,7 +3,7 @@ from enum import Enum
 
 from sqlalchemy import Date, DateTime, ForeignKey, String
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, backref, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -48,4 +48,10 @@ class Baby(Base):
         nullable=False,
     )
 
-    owner = relationship("User", backref="babies")
+    # passive_deletes=True → user silindiğinde ORM owner_id'yi NULL'a çekmek
+    # yerine DB seviyesindeki ON DELETE CASCADE'i çalıştırsın
+    owner = relationship(
+        "User",
+        backref=backref("babies", passive_deletes=True),
+        passive_deletes=True,
+    )
