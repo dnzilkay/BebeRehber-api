@@ -8,6 +8,7 @@ from app.routes import (
     babies,
     baby_members,
     care_logs,
+    community,
     export,
     health,
     journal_entries,
@@ -44,6 +45,7 @@ app.include_router(timeline.router)
 app.include_router(export.router)
 app.include_router(baby_members.baby_router)
 app.include_router(baby_members.invites_router)
+app.include_router(community.router)
 
 
 @app.get("/")
