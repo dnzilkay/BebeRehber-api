@@ -159,9 +159,7 @@ def _ensure_deniz_baby(db: Session, deniz: User) -> tuple[Baby | None, bool]:
 
 
 def _ensure_care_logs(db: Session, baby: Baby) -> int:
-    existing = db.scalar(
-        select(CareLog).where(CareLog.baby_id == baby.id).limit(1)
-    )
+    existing = db.scalar(select(CareLog).where(CareLog.baby_id == baby.id).limit(1))
     if existing is not None:
         return 0
 
@@ -228,18 +226,41 @@ def _ensure_care_logs(db: Session, baby: Baby) -> int:
 
 
 def _ensure_milestones(db: Session, baby: Baby) -> int:
-    existing = db.scalar(
-        select(Milestone).where(Milestone.baby_id == baby.id).limit(1)
-    )
+    existing = db.scalar(select(Milestone).where(Milestone.baby_id == baby.id).limit(1))
     if existing is not None:
         return 0
 
     items = [
-        ("first_smile", "İlk sosyal gülümseme", MilestoneCategory.SOCIAL, date(2025, 10, 20)),
-        ("head_control", "Başını dik tutar", MilestoneCategory.MOTOR, date(2025, 11, 15)),
-        ("rolls_over", "Yuvarlanır (sırt → karın)", MilestoneCategory.MOTOR, date(2025, 12, 18)),
-        ("babbles", "Babıldar (ba-ba, ma-ma)", MilestoneCategory.LANGUAGE, date(2026, 2, 5)),
-        ("sits_unsupported", "Desteksiz oturur", MilestoneCategory.MOTOR, date(2026, 2, 28)),
+        (
+            "first_smile",
+            "İlk sosyal gülümseme",
+            MilestoneCategory.SOCIAL,
+            date(2025, 10, 20),
+        ),
+        (
+            "head_control",
+            "Başını dik tutar",
+            MilestoneCategory.MOTOR,
+            date(2025, 11, 15),
+        ),
+        (
+            "rolls_over",
+            "Yuvarlanır (sırt → karın)",
+            MilestoneCategory.MOTOR,
+            date(2025, 12, 18),
+        ),
+        (
+            "babbles",
+            "Babıldar (ba-ba, ma-ma)",
+            MilestoneCategory.LANGUAGE,
+            date(2026, 2, 5),
+        ),
+        (
+            "sits_unsupported",
+            "Desteksiz oturur",
+            MilestoneCategory.MOTOR,
+            date(2026, 2, 28),
+        ),
         (None, "Köpeğe el salladı", MilestoneCategory.OTHER, date(2026, 4, 12)),
     ]
     rows = [
@@ -261,9 +282,7 @@ def _ensure_milestones(db: Session, baby: Baby) -> int:
 
 
 def _ensure_reminders(db: Session, baby: Baby) -> int:
-    existing = db.scalar(
-        select(Reminder).where(Reminder.baby_id == baby.id).limit(1)
-    )
+    existing = db.scalar(select(Reminder).where(Reminder.baby_id == baby.id).limit(1))
     if existing is not None:
         return 0
 
@@ -273,23 +292,26 @@ def _ensure_reminders(db: Session, baby: Baby) -> int:
             baby_id=baby.id,
             title="9. ay kontrolü",
             kind=ReminderKind.APPOINTMENT,
-            due_at=datetime.combine(today + timedelta(days=5), datetime.min.time(),
-                                     tzinfo=timezone.utc).replace(hour=10, minute=30),
+            due_at=datetime.combine(
+                today + timedelta(days=5), datetime.min.time(), tzinfo=timezone.utc
+            ).replace(hour=10, minute=30),
             note="Pediatri kontrolü",
         ),
         Reminder(
             baby_id=baby.id,
             title="12. ay aşıları",
             kind=ReminderKind.VACCINE,
-            due_at=datetime.combine(today + timedelta(days=14), datetime.min.time(),
-                                     tzinfo=timezone.utc).replace(hour=9, minute=0),
+            due_at=datetime.combine(
+                today + timedelta(days=14), datetime.min.time(), tzinfo=timezone.utc
+            ).replace(hour=9, minute=0),
         ),
         Reminder(
             baby_id=baby.id,
             title="Aile fotoğrafı",
             kind=ReminderKind.GENERAL,
-            due_at=datetime.combine(today + timedelta(days=20), datetime.min.time(),
-                                     tzinfo=timezone.utc).replace(hour=14, minute=0),
+            due_at=datetime.combine(
+                today + timedelta(days=20), datetime.min.time(), tzinfo=timezone.utc
+            ).replace(hour=14, minute=0),
             note="Doğal ışıkta park",
         ),
     ]
@@ -302,9 +324,7 @@ def _ensure_reminders(db: Session, baby: Baby) -> int:
 
 
 def _ensure_journal(db: Session, baby: Baby) -> tuple[int, int]:
-    existing = db.scalar(
-        select(Album).where(Album.baby_id == baby.id).limit(1)
-    )
+    existing = db.scalar(select(Album).where(Album.baby_id == baby.id).limit(1))
     if existing is not None:
         return (0, 0)
 

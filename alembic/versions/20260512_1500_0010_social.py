@@ -56,9 +56,7 @@ def upgrade() -> None:
             server_default="draft",
         ),
         sa.Column("likes", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column(
-            "comments_count", sa.Integer(), nullable=False, server_default="0"
-        ),
+        sa.Column("comments_count", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("shares", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("reach", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("published_at", sa.DateTime(timezone=True), nullable=True),
@@ -78,22 +76,16 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_social_posts_id"), "social_posts", ["id"])
-    op.create_index(
-        op.f("ix_social_posts_author_id"), "social_posts", ["author_id"]
-    )
+    op.create_index(op.f("ix_social_posts_author_id"), "social_posts", ["author_id"])
     op.create_index(op.f("ix_social_posts_platform"), "social_posts", ["platform"])
-    op.create_index(
-        op.f("ix_social_posts_status"), "social_posts", ["status"]
-    )
+    op.create_index(op.f("ix_social_posts_status"), "social_posts", ["status"])
     op.create_index(
         op.f("ix_social_posts_scheduled_for"), "social_posts", ["scheduled_for"]
     )
 
 
 def downgrade() -> None:
-    op.drop_index(
-        op.f("ix_social_posts_scheduled_for"), table_name="social_posts"
-    )
+    op.drop_index(op.f("ix_social_posts_scheduled_for"), table_name="social_posts")
     op.drop_index(op.f("ix_social_posts_status"), table_name="social_posts")
     op.drop_index(op.f("ix_social_posts_platform"), table_name="social_posts")
     op.drop_index(op.f("ix_social_posts_author_id"), table_name="social_posts")
