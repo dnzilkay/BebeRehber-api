@@ -4,6 +4,8 @@ from app.models.baby import Baby
 from app.models.baby_invite import BabyInvite
 from app.models.baby_member import BabyMember
 from app.models.care_log import CareLog
+from app.models.community_comment import CommunityComment
+from app.models.community_post import CommunityPost
 from app.models.journal_entry import JournalEntry
 from app.models.media_asset import MediaAsset
 from app.models.milestone import Milestone
@@ -22,4 +24,6 @@ __all__ = [
     "Album",
     "JournalEntry",
     "MediaAsset",
+    "CommunityPost",
+    "CommunityComment",
 ]
