@@ -16,6 +16,7 @@ from app.routes import (
     media,
     milestones,
     reminders,
+    social,
     timeline,
 )
 
@@ -48,6 +49,7 @@ app.include_router(baby_members.baby_router)
 app.include_router(baby_members.invites_router)
 app.include_router(community.router)
 app.include_router(admin.router)
+app.include_router(social.router)
 
 
 @app.get("/")
