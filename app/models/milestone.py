@@ -37,6 +37,7 @@ class Milestone(Base):
             name="milestone_category",
             native_enum=False,
             length=16,
+            values_callable=lambda e: [m.value for m in e],
         ),
         default=MilestoneCategory.OTHER,
         nullable=False,

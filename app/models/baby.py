@@ -27,7 +27,13 @@ class Baby(Base):
     name: Mapped[str] = mapped_column(String(80), nullable=False)
     birth_date: Mapped[date] = mapped_column(Date, nullable=False)
     gender: Mapped[BabyGender] = mapped_column(
-        SAEnum(BabyGender, name="baby_gender", native_enum=False, length=16),
+        SAEnum(
+            BabyGender,
+            name="baby_gender",
+            native_enum=False,
+            length=16,
+            values_callable=lambda e: [m.value for m in e],
+        ),
         default=BabyGender.UNSPECIFIED,
         nullable=False,
     )

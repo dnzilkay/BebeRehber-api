@@ -31,7 +31,13 @@ class CareLog(Base):
         index=True,
     )
     kind: Mapped[CareKind] = mapped_column(
-        SAEnum(CareKind, name="care_kind", native_enum=False, length=16),
+        SAEnum(
+            CareKind,
+            name="care_kind",
+            native_enum=False,
+            length=16,
+            values_callable=lambda e: [m.value for m in e],
+        ),
         nullable=False,
         index=True,
     )
@@ -43,7 +49,13 @@ class CareLog(Base):
     )
     amount_ml: Mapped[int | None] = mapped_column(Integer, nullable=True)
     diaper_type: Mapped[DiaperType | None] = mapped_column(
-        SAEnum(DiaperType, name="diaper_type", native_enum=False, length=8),
+        SAEnum(
+            DiaperType,
+            name="diaper_type",
+            native_enum=False,
+            length=8,
+            values_callable=lambda e: [m.value for m in e],
+        ),
         nullable=True,
     )
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)

@@ -26,7 +26,13 @@ class Reminder(Base):
     )
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     kind: Mapped[ReminderKind] = mapped_column(
-        SAEnum(ReminderKind, name="reminder_kind", native_enum=False, length=16),
+        SAEnum(
+            ReminderKind,
+            name="reminder_kind",
+            native_enum=False,
+            length=16,
+            values_callable=lambda e: [m.value for m in e],
+        ),
         default=ReminderKind.GENERAL,
         nullable=False,
         index=True,
