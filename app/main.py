@@ -7,11 +7,13 @@ from app.routes import (
     auth,
     babies,
     care_logs,
+    export,
     health,
     journal_entries,
     media,
     milestones,
     reminders,
+    timeline,
 )
 
 app = FastAPI(
@@ -37,6 +39,8 @@ app.include_router(reminders.router)
 app.include_router(albums.router)
 app.include_router(journal_entries.router)
 app.include_router(media.router)
+app.include_router(timeline.router)
+app.include_router(export.router)
 
 
 @app.get("/")

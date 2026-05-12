@@ -89,6 +89,20 @@ def delete_object(object_key: str) -> None:
         pass
 
 
+def download_bytes(object_key: str) -> bytes:
+    """Object'i bytes olarak indir. Yoksa veya hata varsa None döner."""
+    c = get_client()
+    try:
+        response = c.get_object(settings.MINIO_BUCKET, object_key)
+        try:
+            return response.read()
+        finally:
+            response.close()
+            response.release_conn()
+    except S3Error:
+        return b""
+
+
 def public_url(object_key: str) -> str:
     return (
         f"{settings.MINIO_PUBLIC_URL.rstrip('/')}/{settings.MINIO_BUCKET}/{object_key}"
