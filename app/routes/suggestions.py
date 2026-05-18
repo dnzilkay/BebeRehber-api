@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
-from app.core.limits import is_premium
+from app.core.limits import is_premium_for_baby
 from app.core.suggestions import build_suggestions
 from app.models.baby import Baby
 from app.schemas.suggestion import Suggestion
@@ -25,7 +25,7 @@ def get_suggestions(
 ) -> list[Suggestion]:
     ensure_baby_access(db, current_user.id, baby_id)
 
-    if not is_premium(current_user):
+    if not is_premium_for_baby(db, current_user, baby_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(

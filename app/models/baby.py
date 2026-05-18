@@ -55,3 +55,13 @@ class Baby(Base):
         backref=backref("babies", passive_deletes=True),
         passive_deletes=True,
     )
+
+    @property
+    def owner_plan(self):
+        """Owner'ın plan'ı — Pydantic from_attributes ile BabyOut'a aktarılır.
+
+        Per-baby Premium devri için: co-parent davet ile bebeğe eklenmiş Free
+        kullanıcı, bu field üzerinden owner Premium olduğunu görür ve UI
+        Premium feature'larını açar.
+        """
+        return self.owner.plan if self.owner else None

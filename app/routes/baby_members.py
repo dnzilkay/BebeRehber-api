@@ -5,6 +5,7 @@ bebek üyeliğine eklenir (Free olsa bile co-parent olabilir).
 """
 
 import secrets
+import string
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, status
@@ -22,6 +23,17 @@ from app.schemas.baby_member import BabyMemberOut
 
 
 INVITE_TTL_DAYS = 7
+
+# Human-readable 10 char uppercase alphanumeric — hem URL'de hem manuel
+# girilebilir (yanlışlık olmasın diye 0/O ve 1/I/L gibi karışan harfler
+# kaldırıldı). 32^10 ≈ 1.1e15 → tek kullanımlık + 7 gün TTL ile yeterince güvenli.
+_INVITE_CODE_ALPHABET = "".join(
+    c for c in string.ascii_uppercase + string.digits if c not in "O0I1L"
+)
+
+
+def _gen_invite_code() -> str:
+    return "".join(secrets.choice(_INVITE_CODE_ALPHABET) for _ in range(10))
 
 
 # ---------------------------- Members listing ----------------------------
@@ -116,7 +128,10 @@ def create_invite(
             ),
         )
 
-    token = secrets.token_urlsafe(32)
+    # Çakışma olasılığı çok düşük ama gen tekrarı koru
+    token = _gen_invite_code()
+    while db.scalar(select(BabyInvite).where(BabyInvite.token == token)):
+        token = _gen_invite_code()
     expires_at = datetime.now(timezone.utc) + timedelta(days=INVITE_TTL_DAYS)
 
     invite = BabyInvite(
@@ -153,7 +168,9 @@ def accept_invite(
     current_user: CurrentUser,
     db: DbSession,
 ) -> BabyInviteAcceptOut:
-    invite = db.scalar(select(BabyInvite).where(BabyInvite.token == token))
+    # Manuel kod girişinde küçük harf / aralık olabilir — normalize et
+    normalized = token.strip().upper().replace(" ", "").replace("-", "")
+    invite = db.scalar(select(BabyInvite).where(BabyInvite.token == normalized))
     if invite is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Davet bulunamadı."

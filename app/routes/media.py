@@ -7,7 +7,12 @@ from sqlalchemy import func, select
 from app.core import storage, video
 from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
-from app.core.limits import FREE_MAX_MEDIA_PER_ALBUM, is_premium, max_video_seconds
+from app.core.limits import (
+    FREE_MAX_MEDIA_PER_ALBUM,
+    FREE_MAX_VIDEO_SEC,
+    PREMIUM_MAX_VIDEO_SEC,
+    is_premium_for_baby,
+)
 from app.models.journal_entry import JournalEntry
 from app.models.media_asset import MediaAsset, MediaKind
 from app.schemas.media_asset import MediaAssetOut
@@ -51,9 +56,12 @@ def _media_out(m: MediaAsset) -> MediaAssetOut:
     )
 
 
-def _enforce_album_media_limit(db, entry: JournalEntry, user) -> None:
-    """Free pakette albüm başına en fazla FREE_MAX_MEDIA_PER_ALBUM medya."""
-    if is_premium(user):
+def _enforce_album_media_limit(db, entry: JournalEntry, user, baby_id: int) -> None:
+    """Free pakette albüm başına en fazla FREE_MAX_MEDIA_PER_ALBUM medya.
+
+    Premium owner bebek için co-parent de aynı bebekte limitsiz yükler.
+    """
+    if is_premium_for_baby(db, user, baby_id):
         return
     if entry.album_id is None:
         return
@@ -75,19 +83,20 @@ def _enforce_album_media_limit(db, entry: JournalEntry, user) -> None:
         )
 
 
-def _enforce_video_duration(user, duration_sec: int | None) -> None:
+def _enforce_video_duration(db, user, baby_id: int, duration_sec: int | None) -> None:
+    """Premium owner bebek için co-parent uzun video yükleyebilir."""
+    effective_premium = is_premium_for_baby(db, user, baby_id)
     if duration_sec is None:
-        # ffprobe yoksa veya parse edilemediyse Free'de güvenli tarafa çek
-        if not is_premium(user):
+        if not effective_premium:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Video süresi tespit edilemedi; lütfen tekrar dene.",
             )
         return
-    limit = max_video_seconds(user)
+    limit = PREMIUM_MAX_VIDEO_SEC if effective_premium else FREE_MAX_VIDEO_SEC
     if duration_sec > limit:
-        plan_word = "Premium" if is_premium(user) else "Free"
-        upsell = "" if is_premium(user) else " Daha uzun videolar için Premium'a geç."
+        plan_word = "Premium" if effective_premium else "Free"
+        upsell = "" if effective_premium else " Daha uzun videolar için Premium'a geç."
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=(
@@ -122,13 +131,13 @@ async def upload_media(
             detail="Dosya boş.",
         )
 
-    _enforce_album_media_limit(db, entry, current_user)
+    _enforce_album_media_limit(db, entry, current_user, baby_id)
 
     duration_sec: int | None = None
     if kind == MediaKind.VIDEO:
         suffix = Path(file.filename or "").suffix.lower()
         duration_sec = video.probe_duration_seconds(data, suffix=suffix)
-        _enforce_video_duration(current_user, duration_sec)
+        _enforce_video_duration(db, current_user, baby_id, duration_sec)
 
     suffix = Path(file.filename or "").suffix.lower()
     object_key = f"journal/{baby_id}/{entry_id}/{uuid.uuid4().hex}{suffix}"

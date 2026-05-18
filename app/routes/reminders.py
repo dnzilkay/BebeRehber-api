@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
-from app.core.limits import clamp_history_days
+from app.core.limits import clamp_history_days_for_baby
 from app.models.reminder import Reminder, ReminderKind
 from app.schemas.reminder import ReminderCreate, ReminderOut, ReminderUpdate
 
@@ -46,7 +46,7 @@ def list_reminders(
 
     stmt = select(Reminder).where(Reminder.baby_id == baby_id)
     if days is not None:
-        effective_days = clamp_history_days(current_user, days)
+        effective_days = clamp_history_days_for_baby(db, current_user, baby_id, days)
         cutoff = datetime.now(timezone.utc) - timedelta(days=effective_days)
         stmt = stmt.where(Reminder.due_at >= cutoff)
     if upcoming:
