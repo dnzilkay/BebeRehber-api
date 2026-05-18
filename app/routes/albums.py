@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from app.core import storage
 from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
-from app.core.limits import FREE_MAX_ALBUMS, is_premium
+from app.core.limits import FREE_MAX_ALBUMS, is_premium_for_baby
 from app.models.album import Album
 from app.models.journal_entry import JournalEntry
 from app.schemas.album import AlbumCreate, AlbumOut, AlbumUpdate
@@ -71,7 +71,7 @@ def create_album(
     ensure_baby_access(db, current_user.id, baby_id)
 
     # Free pakette en fazla FREE_MAX_ALBUMS albüm
-    if not is_premium(current_user):
+    if not is_premium_for_baby(db, current_user, baby_id):
         existing = (
             db.scalar(select(func.count(Album.id)).where(Album.baby_id == baby_id)) or 0
         )

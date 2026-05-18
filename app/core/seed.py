@@ -12,6 +12,7 @@ from app.models.album import Album
 from app.models.baby import Baby, BabyGender
 from app.models.baby_member import BabyMember, BabyMemberRole
 from app.models.care_log import CareKind, CareLog, DiaperType
+from app.models.community_comment import CommunityComment
 from app.models.community_post import CommunityCategory, CommunityPost
 from app.models.guide_article import GuideArticle, GuideCategory
 from app.models.journal_entry import JournalEntry
@@ -28,6 +29,14 @@ DEMO_USERS: list[dict[str, object]] = [
         "email": "deniz@example.com",
         "name": "Deniz",
         "plan": UserPlan.PREMIUM,
+        "role": UserRole.USER,
+    },
+    {
+        # Free hesap — Deniz'in (Premium owner) davet edeceği co-parent.
+        # Davet kabul edince Premium gate'leri Ada üzerinden açılır.
+        "email": "mehmet@example.com",
+        "name": "Mehmet Yılmaz",
+        "plan": UserPlan.FREE,
         "role": UserRole.USER,
     },
     {
@@ -113,13 +122,22 @@ def seed_demo_data(db: Session) -> dict[str, int]:
         baby, created_baby = _ensure_deniz_baby(db, deniz)
         if baby is not None:
             if created_baby:
-                stats["babies"] = 1
-            stats["care_logs"] = _ensure_care_logs(db, baby)
-            stats["milestones"] = _ensure_milestones(db, baby)
-            stats["reminders"] = _ensure_reminders(db, baby)
+                stats["babies"] += 1
+            stats["care_logs"] += _ensure_care_logs(db, baby)
+            stats["milestones"] += _ensure_milestones(db, baby)
+            stats["reminders"] += _ensure_reminders(db, baby)
             album_n, entry_n = _ensure_journal(db, baby)
-            stats["albums"] = album_n
-            stats["journal_entries"] = entry_n
+            stats["albums"] += album_n
+            stats["journal_entries"] += entry_n
+
+        # İkinci bebek: Cem (yenidoğan, ~2 aylık) — BabySwitcher + farklı yaş
+        cem, created_cem = _ensure_deniz_baby_cem(db, deniz)
+        if cem is not None:
+            if created_cem:
+                stats["babies"] += 1
+            stats["care_logs"] += _ensure_newborn_care_logs(db, cem)
+            stats["milestones"] += _ensure_newborn_milestones(db, cem)
+            stats["reminders"] += _ensure_newborn_reminders(db, cem)
 
     if admin is not None:
         stats["community_posts"] = _ensure_community_posts(db, admin)
@@ -158,10 +176,42 @@ def _ensure_deniz_baby(db: Session, deniz: User) -> tuple[Baby | None, bool]:
     return baby, True
 
 
-# --------------------------- Care logs ---------------------------
+def _ensure_deniz_baby_cem(db: Session, deniz: User) -> tuple[Baby | None, bool]:
+    """İkinci bebek: Cem (~2 aylık yenidoğan).
+
+    BabySwitcher demo'su + farklı yaş aralığı için kişiselleştirilmiş öneri
+    motorunun farklı çıktılar üretebilmesi için.
+    """
+    existing = db.execute(
+        select(Baby).where(Baby.owner_id == deniz.id, Baby.name == "Cem")
+    ).scalar_one_or_none()
+    if existing is not None:
+        return existing, False
+
+    # Bugünden 60 gün önce — testler "fixed today" ile etkilenmesin diye
+    # build sırasındaki gerçek tarihi kullanıyoruz (seed cli ile çalışıyor).
+    birth = _today() - timedelta(days=60)
+    baby = Baby(
+        owner_id=deniz.id,
+        name="Cem",
+        birth_date=birth,
+        gender=BabyGender.BOY,
+    )
+    db.add(baby)
+    db.flush()
+    db.add(
+        BabyMember(
+            baby_id=baby.id,
+            user_id=deniz.id,
+            role=BabyMemberRole.OWNER,
+        )
+    )
+    db.commit()
+    return baby, True
 
 
-def _ensure_care_logs(db: Session, baby: Baby) -> int:
+def _ensure_newborn_care_logs(db: Session, baby: Baby) -> int:
+    """Yenidoğan pattern (Cem için): son 7 gün, sık besleme + uzun uyku."""
     existing = db.scalar(select(CareLog).where(CareLog.baby_id == baby.id).limit(1))
     if existing is not None:
         return 0
@@ -172,30 +222,47 @@ def _ensure_care_logs(db: Session, baby: Baby) -> int:
     for d in range(7):
         day = today - timedelta(days=d)
         y, m, dd = day.year, day.month, day.day
-
-        # Gece uykusu (önceki günden 22:00 → bugün 06:30)
         prev = day - timedelta(days=1)
+
+        # Gece uyandırıldığı için bölük uyku
         rows.append(
             CareLog(
                 baby_id=baby.id,
                 kind=CareKind.SLEEP,
                 started_at=_utc(prev.year, prev.month, prev.day, 22, 0),
-                ended_at=_utc(y, m, dd, 6, 30),
-                note="Gece uykusu",
+                ended_at=_utc(y, m, dd, 2, 30),
+                note="Gece I",
             )
         )
-        # Öğle şekerlemesi
         rows.append(
             CareLog(
                 baby_id=baby.id,
                 kind=CareKind.SLEEP,
-                started_at=_utc(y, m, dd, 13, 0),
-                ended_at=_utc(y, m, dd, 14, 45),
-                note="Öğle şekerlemesi",
+                started_at=_utc(y, m, dd, 3, 30),
+                ended_at=_utc(y, m, dd, 7, 0),
+                note="Gece II",
             )
         )
-        # 4 besleme
-        for hour, ml in ((8, 120), (12, 150), (16, 120), (20, 180)):
+        # Gün içi 3 şekerleme
+        for start_h, end_h in ((9, 11), (13, 15), (17, 18)):
+            rows.append(
+                CareLog(
+                    baby_id=baby.id,
+                    kind=CareKind.SLEEP,
+                    started_at=_utc(y, m, dd, start_h, 0),
+                    ended_at=_utc(y, m, dd, end_h, 0),
+                )
+            )
+        # 7-8 besleme (yenidoğan: 2-3 saatte bir)
+        for hour, ml in (
+            (3, 90),
+            (6, 100),
+            (9, 110),
+            (12, 110),
+            (15, 100),
+            (18, 110),
+            (21, 120),
+        ):
             rows.append(
                 CareLog(
                     baby_id=baby.id,
@@ -204,13 +271,191 @@ def _ensure_care_logs(db: Session, baby: Baby) -> int:
                     amount_ml=ml,
                 )
             )
-        # 4 bez
+        # 6 bez
         for hour, dt in (
+            (7, DiaperType.PEE),
+            (10, DiaperType.POOP),
+            (13, DiaperType.PEE),
+            (16, DiaperType.BOTH),
+            (19, DiaperType.PEE),
+            (22, DiaperType.PEE),
+        ):
+            rows.append(
+                CareLog(
+                    baby_id=baby.id,
+                    kind=CareKind.DIAPER,
+                    started_at=_utc(y, m, dd, hour, 30),
+                    diaper_type=dt,
+                )
+            )
+
+    db.add_all(rows)
+    db.commit()
+    return len(rows)
+
+
+def _ensure_newborn_milestones(db: Session, baby: Baby) -> int:
+    """Cem için 1-2 yaşa uygun milestone (sosyal gülümseme, baş tutma erken)."""
+    existing = db.scalar(select(Milestone).where(Milestone.baby_id == baby.id).limit(1))
+    if existing is not None:
+        return 0
+
+    today = _today()
+    rows = [
+        Milestone(
+            baby_id=baby.id,
+            preset_id="social_smile",
+            title="İlk sosyal gülümseme",
+            category=MilestoneCategory.SOCIAL,
+            reached_on=today - timedelta(days=15),
+        ),
+        Milestone(
+            baby_id=baby.id,
+            preset_id=None,
+            title="Sesini duyunca dönüyor",
+            category=MilestoneCategory.SOCIAL,
+            reached_on=today - timedelta(days=4),
+        ),
+    ]
+    db.add_all(rows)
+    db.commit()
+    return len(rows)
+
+
+def _ensure_newborn_reminders(db: Session, baby: Baby) -> int:
+    existing = db.scalar(select(Reminder).where(Reminder.baby_id == baby.id).limit(1))
+    if existing is not None:
+        return 0
+
+    today = _today()
+
+    def _at(offset_days: int, hour: int, minute: int = 0) -> datetime:
+        return datetime.combine(
+            today + timedelta(days=offset_days),
+            datetime.min.time(),
+            tzinfo=timezone.utc,
+        ).replace(hour=hour, minute=minute)
+
+    rows = [
+        Reminder(
+            baby_id=baby.id,
+            title="1. ay kontrolü",
+            kind=ReminderKind.APPOINTMENT,
+            due_at=_at(-30, 11, 0),
+            completed_at=_at(-30, 12, 30),
+            note="Sağlıklı — kilo +800g",
+        ),
+        Reminder(
+            baby_id=baby.id,
+            title="2. ay aşıları (Hep B + DBT)",
+            kind=ReminderKind.VACCINE,
+            due_at=_at(3, 9, 30),
+        ),
+        Reminder(
+            baby_id=baby.id,
+            title="Göbek bandı kontrolü",
+            kind=ReminderKind.GENERAL,
+            due_at=_at(1, 8, 0),
+            note="Kuru ve temiz kaldı mı?",
+        ),
+    ]
+    db.add_all(rows)
+    db.commit()
+    return len(rows)
+
+
+# --------------------------- Care logs ---------------------------
+
+
+def _ensure_care_logs(db: Session, baby: Baby) -> int:
+    """Ada için 30 günlük gerçekçi bakım pattern'i (uyku/besleme/bez).
+
+    Her gün küçük varyasyonlarla; Premium 30 günlük analiz seçeneği zengin
+    görünür, kişiselleştirilmiş öneri motoru anlamlı sinyal üretir.
+    """
+    existing = db.scalar(select(CareLog).where(CareLog.baby_id == baby.id).limit(1))
+    if existing is not None:
+        return 0
+
+    today = _today()
+    rows: list[CareLog] = []
+
+    # Tekrarlanabilir varyasyon — index'e göre küçük dalgalanmalar
+    def _wobble(base: int, mod: int, amp: int) -> int:
+        return base + ((mod * 7) % (amp * 2 + 1)) - amp
+
+    for d in range(30):
+        day = today - timedelta(days=d)
+        y, m, dd = day.year, day.month, day.day
+        prev = day - timedelta(days=1)
+
+        # Gece uykusu — bitiş ±20 dk dalgalı (06:10–06:50 arası)
+        end_min = 30 + _wobble(0, d, 20)
+        rows.append(
+            CareLog(
+                baby_id=baby.id,
+                kind=CareKind.SLEEP,
+                started_at=_utc(prev.year, prev.month, prev.day, 22, 0),
+                ended_at=_utc(y, m, dd, 6, max(0, min(59, end_min))),
+                note="Gece uykusu",
+            )
+        )
+        # Öğle şekerlemesi — süre 90–120 dk
+        nap_end = 45 + _wobble(0, d + 3, 15)
+        rows.append(
+            CareLog(
+                baby_id=baby.id,
+                kind=CareKind.SLEEP,
+                started_at=_utc(y, m, dd, 13, 0),
+                ended_at=_utc(y, m, dd, 14, max(0, min(59, nap_end))),
+                note="Öğle şekerlemesi",
+            )
+        )
+        # Bazı günler kısa bir akşamüstü şekerlemesi de var
+        if d % 3 == 0:
+            rows.append(
+                CareLog(
+                    baby_id=baby.id,
+                    kind=CareKind.SLEEP,
+                    started_at=_utc(y, m, dd, 17, 30),
+                    ended_at=_utc(y, m, dd, 18, 10),
+                    note="Akşamüstü kestirme",
+                )
+            )
+
+        # 4 besleme, miktar ±20ml dalgalı (dakika sabit, sadece ml wobble)
+        feedings = ((8, 120), (12, 150), (16, 120), (20, 180))
+        for i, (hour, ml) in enumerate(feedings):
+            rows.append(
+                CareLog(
+                    baby_id=baby.id,
+                    kind=CareKind.FEEDING,
+                    started_at=_utc(y, m, dd, hour, 0),
+                    amount_ml=ml + _wobble(0, d * 2 + i, 20),
+                )
+            )
+        # Bazı günler 5. besleme (gece arası)
+        if d % 4 == 0:
+            rows.append(
+                CareLog(
+                    baby_id=baby.id,
+                    kind=CareKind.FEEDING,
+                    started_at=_utc(y, m, dd, 2, 30),
+                    amount_ml=140,
+                    note="Gece beslemesi",
+                )
+            )
+
+        # 4 bez, son haftada 5 (yaşa uygun küçük artış)
+        diapers = [
             (8, DiaperType.PEE),
             (13, DiaperType.BOTH),
             (17, DiaperType.PEE),
             (21, DiaperType.POOP),
-        ):
+        ]
+        if d < 7:
+            diapers.append((11, DiaperType.PEE))
+        for hour, dt in diapers:
             rows.append(
                 CareLog(
                     baby_id=baby.id,
@@ -235,10 +480,16 @@ def _ensure_milestones(db: Session, baby: Baby) -> int:
 
     items = [
         (
-            "first_smile",
+            "social_smile",
             "İlk sosyal gülümseme",
             MilestoneCategory.SOCIAL,
             date(2025, 10, 20),
+        ),
+        (
+            None,
+            "Yüksek sesli kahkaha",
+            MilestoneCategory.SOCIAL,
+            date(2025, 11, 8),
         ),
         (
             "head_control",
@@ -253,18 +504,36 @@ def _ensure_milestones(db: Session, baby: Baby) -> int:
             date(2025, 12, 18),
         ),
         (
+            None,
+            "İlk ek gıda — havuç püresi",
+            MilestoneCategory.PHYSICAL,
+            date(2026, 1, 22),
+        ),
+        (
             "babbles",
             "Babıldar (ba-ba, ma-ma)",
             MilestoneCategory.LANGUAGE,
             date(2026, 2, 5),
         ),
         (
-            "sits_unsupported",
+            "sits_supported",
             "Desteksiz oturur",
             MilestoneCategory.MOTOR,
             date(2026, 2, 28),
         ),
-        (None, "Köpeğe el salladı", MilestoneCategory.OTHER, date(2026, 4, 12)),
+        (
+            None,
+            "İlk diş çıktı (alt ön)",
+            MilestoneCategory.PHYSICAL,
+            date(2026, 3, 14),
+        ),
+        (
+            None,
+            "Adını duyunca dönüyor",
+            MilestoneCategory.LANGUAGE,
+            date(2026, 4, 2),
+        ),
+        (None, "Köpeğe el salladı", MilestoneCategory.SOCIAL, date(2026, 4, 12)),
     ]
     rows = [
         Milestone(
@@ -290,32 +559,58 @@ def _ensure_reminders(db: Session, baby: Baby) -> int:
         return 0
 
     today = _today()
+
+    def _at(offset_days: int, hour: int, minute: int = 0) -> datetime:
+        return datetime.combine(
+            today + timedelta(days=offset_days),
+            datetime.min.time(),
+            tzinfo=timezone.utc,
+        ).replace(hour=hour, minute=minute)
+
     rows = [
+        # Geçmişte tamamlanmış — geçmiş referansı + Aile/Premium history için
+        Reminder(
+            baby_id=baby.id,
+            title="6. ay kontrolü",
+            kind=ReminderKind.APPOINTMENT,
+            due_at=_at(-45, 10, 0),
+            completed_at=_at(-45, 11, 30),
+            note="Pediatri rutin kontrolü — tamamlandı",
+        ),
+        Reminder(
+            baby_id=baby.id,
+            title="D vitamini takviyesi (haftalık)",
+            kind=ReminderKind.GENERAL,
+            due_at=_at(-3, 9, 0),
+            completed_at=_at(-3, 9, 15),
+        ),
+        # Yaklaşan — bugünden sonra
         Reminder(
             baby_id=baby.id,
             title="9. ay kontrolü",
             kind=ReminderKind.APPOINTMENT,
-            due_at=datetime.combine(
-                today + timedelta(days=5), datetime.min.time(), tzinfo=timezone.utc
-            ).replace(hour=10, minute=30),
+            due_at=_at(5, 10, 30),
             note="Pediatri kontrolü",
+        ),
+        Reminder(
+            baby_id=baby.id,
+            title="Demir takviyesi başlangıç",
+            kind=ReminderKind.GENERAL,
+            due_at=_at(2, 8, 30),
+            note="6 ay sonrası rutin",
         ),
         Reminder(
             baby_id=baby.id,
             title="12. ay aşıları",
             kind=ReminderKind.VACCINE,
-            due_at=datetime.combine(
-                today + timedelta(days=14), datetime.min.time(), tzinfo=timezone.utc
-            ).replace(hour=9, minute=0),
+            due_at=_at(14, 9, 0),
         ),
         Reminder(
             baby_id=baby.id,
-            title="Aile fotoğrafı",
+            title="Aile fotoğrafı çekimi",
             kind=ReminderKind.GENERAL,
-            due_at=datetime.combine(
-                today + timedelta(days=20), datetime.min.time(), tzinfo=timezone.utc
-            ).replace(hour=14, minute=0),
-            note="Doğal ışıkta park",
+            due_at=_at(20, 14, 0),
+            note="Doğal ışıkta park — sage ton ağırlıklı kıyafet",
         ),
     ]
     db.add_all(rows)
@@ -331,21 +626,60 @@ def _ensure_journal(db: Session, baby: Baby) -> tuple[int, int]:
     if existing is not None:
         return (0, 0)
 
-    album = Album(baby_id=baby.id, name="İlk yıl")
-    db.add(album)
+    album_ilk_yil = Album(baby_id=baby.id, name="İlk yıl")
+    album_aile = Album(baby_id=baby.id, name="Aile anları")
+    album_gezi = Album(baby_id=baby.id, name="Gezi ve doğa")
+    db.add_all([album_ilk_yil, album_aile, album_gezi])
     db.flush()
 
     entries = [
         JournalEntry(
             baby_id=baby.id,
-            album_id=album.id,
+            album_id=album_ilk_yil.id,
             title="İlk gülümseme",
             body="Sabah uyandığında bana baktı ve geniş bir gülümseme verdi.",
             occurred_on=date(2025, 10, 20),
         ),
         JournalEntry(
             baby_id=baby.id,
-            album_id=album.id,
+            album_id=album_aile.id,
+            title="Anneanne ile ilk tanışma",
+            body=(
+                "Anneanne kapıdan girer girmez bütün gözleri ona kilitlendi. "
+                "Kucağına alınca uzun süre ağladığı bir öğleden sonra geçti."
+            ),
+            occurred_on=date(2025, 11, 30),
+        ),
+        JournalEntry(
+            baby_id=baby.id,
+            album_id=album_ilk_yil.id,
+            title="İlk ek gıda — havuç püresi",
+            body=(
+                "Kaşığı uzattığımda yüzünü buruşturdu ama ikinci kaşıkta kabul "
+                "etti. Üzerinde kalan turuncu izleri silmek zor oldu."
+            ),
+            occurred_on=date(2026, 1, 22),
+        ),
+        JournalEntry(
+            baby_id=baby.id,
+            album_id=album_gezi.id,
+            title="Park gezisi",
+            body="Yapraklara dokunmayı çok sevdi. Salıncak ilk başta korkuttu.",
+            occurred_on=date(2026, 3, 5),
+        ),
+        JournalEntry(
+            baby_id=baby.id,
+            album_id=album_aile.id,
+            title="6 aylık fotoğraf çekimi",
+            body=(
+                "Sage tonunda kıyafet + doğal ışık. Profesyonel olmayan ama "
+                "ailenin en sevdiği seri oldu."
+            ),
+            occurred_on=date(2026, 2, 14),
+        ),
+        JournalEntry(
+            baby_id=baby.id,
+            album_id=album_gezi.id,
             title="Sahil günü",
             body="İlk kez denizi gördü; kuma dokunmaya çekindi ama sonra çok eğlendi.",
             occurred_on=date(2026, 5, 1),
@@ -353,20 +687,26 @@ def _ensure_journal(db: Session, baby: Baby) -> tuple[int, int]:
     ]
     db.add_all(entries)
     db.commit()
-    return (1, len(entries))
+    return (3, len(entries))
 
 
 # --------------------------- Community ---------------------------
 
 
 def _ensure_community_posts(db: Session, admin: User) -> int:
+    """Uzman post'ları + Deniz'den 3 ebeveyn paylaşımı + birkaç yorum.
+
+    Topluluk modülünü "boş" göstermemek için. Filtre chip'leri, uzman rozeti,
+    yorum listesi ve farklı kategoriler için yeterli demo verisi.
+    """
     existing = db.scalar(
         select(CommunityPost).where(CommunityPost.is_expert.is_(True)).limit(1)
     )
     if existing is not None:
         return 0
 
-    items = [
+    # Uzman post'ları (admin yazdı, is_expert=True)
+    expert_items: list[tuple[str, str, CommunityCategory]] = [
         (
             "Pediatristten 0-12 ay aşı takvimi",
             "Hep sorulan aşı zamanlamaları ve pratik bilgiler. Hatırlatıcı kurmak "
@@ -379,8 +719,15 @@ def _ensure_community_posts(db: Session, admin: User) -> int:
             "ortam sıcaklığı 21-22°C + son besleme saati en kritik üç değişken.",
             CommunityCategory.SLEEP,
         ),
+        (
+            "6 ay sonrası ek gıda — ne ile başlamalı?",
+            "Tek gıdalı, az miktarda başla. Önce sebze püresi, sonra meyve, sonra "
+            "et ve tahıllar. Yeni bir gıda eklediğinde 3 gün ara ver ki alerji "
+            "varsa fark edesin. Bal 1 yaş öncesi yasak.",
+            CommunityCategory.FEEDING,
+        ),
     ]
-    rows = [
+    expert_posts = [
         CommunityPost(
             author_id=admin.id,
             title=title,
@@ -388,11 +735,74 @@ def _ensure_community_posts(db: Session, admin: User) -> int:
             category=cat,
             is_expert=True,
         )
-        for (title, body, cat) in items
+        for (title, body, cat) in expert_items
     ]
-    db.add_all(rows)
+    db.add_all(expert_posts)
+    db.flush()
+
+    # Ebeveyn paylaşımları (Deniz yazdı, is_expert=False)
+    deniz = _get_user(db, "deniz@example.com")
+    parent_posts: list[CommunityPost] = []
+    if deniz is not None:
+        parent_items: list[tuple[str, str, CommunityCategory]] = [
+            (
+                "İlk diş çıkarken huysuzlandı — ne işe yaradı?",
+                "Ada 7 aylıkken alt ön diş çıkarırken 3 gün boyunca çok ağladı. "
+                "Soğuk diş halkası + bol kucak işe yaradı. Sizde işe yarayan "
+                "başka pratikler var mı?",
+                CommunityCategory.DEVELOPMENT,
+            ),
+            (
+                "Anneanneye bebek bırakmak — ilk ayrılık",
+                "İlk kez 4 saat dışarıda kaldım, döndüğümde Ada gayet iyiydi ama "
+                "ben fena halde özlemiştim :) Sizin ilk ayrılığınız nasıldı?",
+                CommunityCategory.GENERAL,
+            ),
+            (
+                "Gece uyandırılan beslemeyi nasıl bıraktınız?",
+                "Ada 6 ay+, hâlâ gece 3'te uyanıp beslenmek istiyor. Yavaş yavaş "
+                "azaltmak istiyorum ama 'aniden mi tedrici mi' kararsızım. "
+                "Deneyimleri duymak isterim.",
+                CommunityCategory.SLEEP,
+            ),
+        ]
+        parent_posts = [
+            CommunityPost(
+                author_id=deniz.id,
+                title=title,
+                body=body,
+                category=cat,
+                is_expert=False,
+            )
+            for (title, body, cat) in parent_items
+        ]
+        db.add_all(parent_posts)
+        db.flush()
+
+    # İlk uzman post'a iki yorum
+    if expert_posts:
+        first = expert_posts[0]
+        comments: list[CommunityComment] = []
+        if deniz is not None:
+            comments.append(
+                CommunityComment(
+                    post_id=first.id,
+                    author_id=deniz.id,
+                    body="Teşekkürler, 9. ay aşılarını hatırlatıcıya hemen aldım.",
+                )
+            )
+        comments.append(
+            CommunityComment(
+                post_id=first.id,
+                author_id=admin.id,
+                body="Aşı sonrası ateş yüksekse 1-2 gün izleyip pediatristine danışman yeterli.",
+            )
+        )
+        if comments:
+            db.add_all(comments)
+
     db.commit()
-    return len(rows)
+    return len(expert_posts) + len(parent_posts)
 
 
 # --------------------------- Guide articles ---------------------------

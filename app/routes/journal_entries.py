@@ -6,7 +6,7 @@ from sqlalchemy import select
 from app.core import storage
 from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
-from app.core.limits import clamp_history_days
+from app.core.limits import clamp_history_days_for_baby
 from app.models.album import Album
 from app.models.journal_entry import JournalEntry
 from app.models.media_asset import MediaAsset
@@ -87,7 +87,7 @@ def list_entries(
 
     stmt = select(JournalEntry).where(JournalEntry.baby_id == baby_id)
     if days is not None:
-        effective_days = clamp_history_days(current_user, days)
+        effective_days = clamp_history_days_for_baby(db, current_user, baby_id, days)
         cutoff = date.today() - timedelta(days=effective_days)
         stmt = stmt.where(JournalEntry.occurred_on >= cutoff)
     if album_id is not None:

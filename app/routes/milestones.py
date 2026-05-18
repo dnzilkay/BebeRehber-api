@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
-from app.core.limits import clamp_history_days
+from app.core.limits import clamp_history_days_for_baby
 from app.models.milestone import Milestone, MilestoneCategory
 from app.schemas.milestone import MilestoneCreate, MilestoneOut, MilestoneUpdate
 
@@ -46,7 +46,7 @@ def list_milestones(
 
     stmt = select(Milestone).where(Milestone.baby_id == baby_id)
     if days is not None:
-        effective_days = clamp_history_days(current_user, days)
+        effective_days = clamp_history_days_for_baby(db, current_user, baby_id, days)
         cutoff = date.today() - timedelta(days=effective_days)
         stmt = stmt.where(Milestone.reached_on >= cutoff)
     if category is not None:
