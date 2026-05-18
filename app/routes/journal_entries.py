@@ -1,9 +1,12 @@
+from datetime import date, timedelta
+
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.core import storage
 from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
+from app.core.limits import clamp_history_days
 from app.models.album import Album
 from app.models.journal_entry import JournalEntry
 from app.models.media_asset import MediaAsset
@@ -73,10 +76,20 @@ def list_entries(
     db: DbSession,
     album_id: int | None = Query(default=None),
     limit: int | None = Query(default=None, ge=1, le=500),
+    days: int | None = Query(
+        default=None,
+        ge=1,
+        le=365,
+        description="Son N gün penceresi; plan tavanı uygulanır (Free 14 / Premium 365).",
+    ),
 ) -> list[JournalEntryOut]:
     ensure_baby_access(db, current_user.id, baby_id)
 
     stmt = select(JournalEntry).where(JournalEntry.baby_id == baby_id)
+    if days is not None:
+        effective_days = clamp_history_days(current_user, days)
+        cutoff = date.today() - timedelta(days=effective_days)
+        stmt = stmt.where(JournalEntry.occurred_on >= cutoff)
     if album_id is not None:
         stmt = stmt.where(JournalEntry.album_id == album_id)
     stmt = stmt.order_by(
