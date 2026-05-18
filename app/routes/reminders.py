@@ -1,10 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
+from app.core.limits import clamp_history_days
 from app.models.reminder import Reminder, ReminderKind
 from app.schemas.reminder import ReminderCreate, ReminderOut, ReminderUpdate
 
@@ -34,10 +35,20 @@ def list_reminders(
     db: DbSession,
     upcoming: bool = Query(default=False, description="Sadece tamamlanmamış"),
     kind: ReminderKind | None = Query(default=None),
+    days: int | None = Query(
+        default=None,
+        ge=1,
+        le=365,
+        description="Geçmiş hatırlatıcılar penceresi; plan tavanı uygulanır (Free 14 / Premium 365).",
+    ),
 ) -> list[Reminder]:
     ensure_baby_access(db, current_user.id, baby_id)
 
     stmt = select(Reminder).where(Reminder.baby_id == baby_id)
+    if days is not None:
+        effective_days = clamp_history_days(current_user, days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=effective_days)
+        stmt = stmt.where(Reminder.due_at >= cutoff)
     if upcoming:
         stmt = stmt.where(Reminder.completed_at.is_(None))
     if kind is not None:

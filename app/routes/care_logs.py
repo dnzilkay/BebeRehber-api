@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 
 from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
+from app.core.limits import clamp_history_days
 from app.models.care_log import CareKind, CareLog
 from app.schemas.care_log import CareLogCreate, CareLogOut, CareSummary
 
@@ -26,6 +27,7 @@ def list_care_logs(
 ) -> list[CareLog]:
     ensure_baby_access(db, current_user.id, baby_id)
 
+    days = clamp_history_days(current_user, days)
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     stmt = (
         select(CareLog)
@@ -103,6 +105,7 @@ def care_summary(
 ) -> CareSummary:
     ensure_baby_access(db, current_user.id, baby_id)
 
+    days = clamp_history_days(current_user, days)
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     base = select(CareLog).where(
         CareLog.baby_id == baby_id, CareLog.started_at >= cutoff
