@@ -13,6 +13,7 @@ from app.models.baby import Baby, BabyGender
 from app.models.baby_member import BabyMember, BabyMemberRole
 from app.models.care_log import CareKind, CareLog, DiaperType
 from app.models.community_post import CommunityCategory, CommunityPost
+from app.models.guide_article import GuideArticle, GuideCategory
 from app.models.journal_entry import JournalEntry
 from app.models.milestone import Milestone, MilestoneCategory
 from app.models.reminder import Reminder, ReminderKind
@@ -102,6 +103,7 @@ def seed_demo_data(db: Session) -> dict[str, int]:
         "journal_entries": 0,
         "community_posts": 0,
         "social_posts": 0,
+        "guide_articles": 0,
     }
 
     deniz = _get_user(db, "deniz@example.com")
@@ -122,6 +124,7 @@ def seed_demo_data(db: Session) -> dict[str, int]:
     if admin is not None:
         stats["community_posts"] = _ensure_community_posts(db, admin)
         stats["social_posts"] = _ensure_social_posts(db, admin)
+        stats["guide_articles"] = _ensure_guide_articles(db, admin)
 
     return stats
 
@@ -386,6 +389,107 @@ def _ensure_community_posts(db: Session, admin: User) -> int:
             is_expert=True,
         )
         for (title, body, cat) in items
+    ]
+    db.add_all(rows)
+    db.commit()
+    return len(rows)
+
+
+# --------------------------- Guide articles ---------------------------
+
+
+def _ensure_guide_articles(db: Session, admin: User) -> int:
+    existing = db.scalar(select(GuideArticle).limit(1))
+    if existing is not None:
+        return 0
+
+    items: list[tuple[str, str, str, str, GuideCategory]] = [
+        (
+            "hamilelikte-ilk-3-ay",
+            "Hamilelikte ilk 3 ay: değişimler ve dikkat edilecekler",
+            "Bulantı, yorgunluk ve duygusal dalgalanmalar normaldir. "
+            "İlk trimestrde takip etmen gereken temel başlıklar.",
+            "Hamileliğin ilk üç ayında vücudun hızla değişir: hormon dalgalanmaları, "
+            "bulantı (özellikle sabah), yorgunluk ve memelerde hassasiyet en sık "
+            "yaşanan değişimlerdir.\n\n"
+            "**İlk doktor randevusu** 6-8. hafta arası önerilir. "
+            "Folik asit takviyesi (günde 400-800 mcg) ve B12 takibi bu dönemde "
+            "kritiktir.\n\n"
+            "Çiğ et, çiğ balık, pastörize edilmemiş süt ürünleri ve fazla kafeinden "
+            "uzak dur. Su tüketimine dikkat et — günde 2-2.5 litre hedef.",
+            GuideCategory.PREGNANCY,
+        ),
+        (
+            "yenidogan-bakimi-0-3-ay",
+            "Yenidoğan bakımı: 0-3 ay temel rehber",
+            "Beslenme, uyku düzeni, göbek bakımı ve ilk doktor kontrolleri için "
+            "yenidoğan dönemi rehberi.",
+            "Yenidoğan dönemi (0-3 ay) bebeğin dünyaya uyum sağladığı dönemdir.\n\n"
+            "**Beslenme:** 2-3 saatte bir, günde 8-12 kez. Anne sütü ilk 6 ay "
+            "tek başına yeterlidir.\n\n"
+            "**Uyku:** Günde toplam 14-17 saat, ama parça parça. Sırtüstü "
+            "yatırılması SIDS riskini azaltır.\n\n"
+            "**Göbek bakımı:** Düşene kadar (genellikle 1-3 hafta) temiz ve kuru "
+            "tutulmalı. Alkol veya antiseptik gerekmez, sade su yeterli.\n\n"
+            "**Doktor kontrolleri:** 1. hafta, 1. ay, 2. ay, 3. ay rutin kontroller. "
+            "Aşı takvimi 2. aydan başlar.",
+            GuideCategory.NEWBORN,
+        ),
+        (
+            "3-6-ay-gelisim-rehberi",
+            "3-6 ay: gelişim ve etkileşim",
+            "Sosyal gülümseme, baş kontrolü ve nesnelere uzanma — bu dönemin "
+            "kilit milestone'ları.",
+            "3-6 ay arası bebek aktif olarak çevresine tepki vermeye başlar.\n\n"
+            "**Beklenen gelişimler:** Sosyal gülümseme, yüksek sesli kahkaha, "
+            "başını destek almadan dik tutma, sırtüstünden yan dönme, nesnelere "
+            "uzanma.\n\n"
+            "**Tummy time** günde toplam 30+ dakika hedeflenebilir; boyun ve sırt "
+            "kaslarını güçlendirir.\n\n"
+            "**Ek gıda hazırlık dönemi.** 6 ay civarına yaklaştıkça pediatristle "
+            "ek gıda zamanlamasını netleştir.",
+            GuideCategory.INFANT,
+        ),
+        (
+            "6-12-ay-ek-gida-ve-hareket",
+            "6-12 ay: ek gıda ve mobilite",
+            "Ek gıdaya geçiş, oturma, emekleme ve ilk adımlar — yoğun motor "
+            "gelişim dönemi.",
+            "6-12 ay arası bebeğin **fiziksel mobilitesi** patlar.\n\n"
+            "**Ek gıda:** Tek gıdalı, az miktarda başla. Önce sebze püresi, sonra "
+            "meyve, sonra et ve tahıllar. Bal 1 yaşından önce verilmez.\n\n"
+            "**Motor gelişim:** 6-7 ay desteksiz oturma, 8-10 ay emekleme, 9-12 ay "
+            "tutunarak ayağa kalkma, 12 ay civarı ilk adımlar.\n\n"
+            "**Ev güvenliği:** Köşe yumuşatıcı, dolap kilitleri, priz kapakları "
+            "bu dönemde kritik.",
+            GuideCategory.OLDER_INFANT,
+        ),
+        (
+            "12-ay-ustu-yurume-ve-konusma",
+            "12+ ay: yürüme ve konuşma",
+            "İlk kelimeler, bağımsız yürüyüş, kendini ifade etme — yürüme sonrası "
+            "dönemin temel başlıkları.",
+            "12 ay sonrası bebekten 'yürüyüp konuşan bir insana' geçiş başlar.\n\n"
+            "**Konuşma:** 12-15 ay ilk anlamlı kelimeler ('mama', 'baba'). 18 ayda "
+            "10-25 kelime tipik. 2 yaşa kadar 50+ kelime ve iki kelimeli cümleler.\n\n"
+            "**Yürüme:** 12-18 ay arası geniş normal aralık. Geç yürüyen "
+            "çocuklar için 18 ay sonrası pediatristle değerlendirme önerilir.\n\n"
+            "**Rutin ve sınırlar:** Bu yaşta tutarlı, kısa ve açık talimatlar "
+            "çocuğun güvenlik hissini artırır.",
+            GuideCategory.TODDLER,
+        ),
+    ]
+
+    rows = [
+        GuideArticle(
+            author_id=admin.id,
+            slug=slug,
+            title=title,
+            summary=summary,
+            body=body,
+            category=cat,
+        )
+        for (slug, title, summary, body, cat) in items
     ]
     db.add_all(rows)
     db.commit()
