@@ -17,6 +17,7 @@ from app.routes import (
     milestones,
     reminders,
     social,
+    suggestions,
     timeline,
 )
 
@@ -45,6 +46,7 @@ app.include_router(journal_entries.router)
 app.include_router(media.router)
 app.include_router(timeline.router)
 app.include_router(export.router)
+app.include_router(suggestions.router)
 app.include_router(baby_members.baby_router)
 app.include_router(baby_members.invites_router)
 app.include_router(community.router)
