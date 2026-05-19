@@ -2,6 +2,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.audit import ActorOut
 from app.schemas.media_asset import MediaAssetOut
 
 
@@ -27,6 +28,7 @@ class JournalEntryOut(JournalEntryBase):
     id: int
     baby_id: int
     created_at: datetime
+    created_by: ActorOut | None = None
     media: list[MediaAssetOut] = []
 
     model_config = ConfigDict(from_attributes=True)

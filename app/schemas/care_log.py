@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.care_log import CareKind, DiaperType
+from app.schemas.audit import ActorOut
 
 
 class CareLogBase(BaseModel):
@@ -33,6 +34,7 @@ class CareLogOut(CareLogBase):
     id: int
     baby_id: int
     created_at: datetime
+    created_by: ActorOut | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

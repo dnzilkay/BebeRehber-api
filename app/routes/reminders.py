@@ -3,11 +3,23 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
+from app.core.audit import actor_for
 from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
 from app.core.limits import clamp_history_days_for_baby
 from app.models.reminder import Reminder, ReminderKind
 from app.schemas.reminder import ReminderCreate, ReminderOut, ReminderUpdate
+
+
+def _reminder_out(db, reminder: Reminder) -> ReminderOut:
+    out = ReminderOut.model_validate(reminder)
+    return out.model_copy(
+        update={
+            "created_by": actor_for(
+                db, reminder.baby_id, reminder.created_by_user_id
+            )
+        }
+    )
 
 
 router = APIRouter(prefix="/babies/{baby_id}/reminders", tags=["reminders"])
@@ -41,7 +53,7 @@ def list_reminders(
         le=365,
         description="Geçmiş hatırlatıcılar penceresi; plan tavanı uygulanır (Free 14 / Premium 365).",
     ),
-) -> list[Reminder]:
+) -> list[ReminderOut]:
     ensure_baby_access(db, current_user.id, baby_id)
 
     stmt = select(Reminder).where(Reminder.baby_id == baby_id)
@@ -55,7 +67,8 @@ def list_reminders(
         stmt = stmt.where(Reminder.kind == kind)
     stmt = stmt.order_by(Reminder.due_at.asc())
 
-    return list(db.execute(stmt).scalars().all())
+    rows = list(db.execute(stmt).scalars().all())
+    return [_reminder_out(db, r) for r in rows]
 
 
 @router.post(
@@ -69,7 +82,7 @@ def create_reminder(
     payload: ReminderCreate,
     current_user: CurrentUser,
     db: DbSession,
-) -> Reminder:
+) -> ReminderOut:
     ensure_baby_access(db, current_user.id, baby_id)
 
     reminder = Reminder(
@@ -78,11 +91,12 @@ def create_reminder(
         kind=payload.kind,
         due_at=payload.due_at,
         note=payload.note,
+        created_by_user_id=current_user.id,
     )
     db.add(reminder)
     db.commit()
     db.refresh(reminder)
-    return reminder
+    return _reminder_out(db, reminder)
 
 
 @router.patch(
@@ -96,7 +110,7 @@ def update_reminder(
     payload: ReminderUpdate,
     current_user: CurrentUser,
     db: DbSession,
-) -> Reminder:
+) -> ReminderOut:
     reminder = _get_owned_reminder(db, current_user.id, baby_id, reminder_id)
 
     data = payload.model_dump(exclude_unset=True)
@@ -110,7 +124,7 @@ def update_reminder(
 
     db.commit()
     db.refresh(reminder)
-    return reminder
+    return _reminder_out(db, reminder)
 
 
 @router.delete(

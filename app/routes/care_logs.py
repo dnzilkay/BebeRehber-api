@@ -3,11 +3,19 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
+from app.core.audit import actor_for
 from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
 from app.core.limits import clamp_history_days_for_baby
 from app.models.care_log import CareKind, CareLog
 from app.schemas.care_log import CareLogCreate, CareLogOut, CareSummary
+
+
+def _care_log_out(db, log: CareLog) -> CareLogOut:
+    out = CareLogOut.model_validate(log)
+    return out.model_copy(
+        update={"created_by": actor_for(db, log.baby_id, log.created_by_user_id)}
+    )
 
 
 router = APIRouter(prefix="/babies/{baby_id}/care-logs", tags=["care-logs"])
@@ -24,7 +32,7 @@ def list_care_logs(
     db: DbSession,
     kind: CareKind | None = Query(default=None),
     days: int = Query(default=7, ge=1, le=365),
-) -> list[CareLog]:
+) -> list[CareLogOut]:
     ensure_baby_access(db, current_user.id, baby_id)
 
     days = clamp_history_days_for_baby(db, current_user, baby_id, days)
@@ -38,7 +46,8 @@ def list_care_logs(
         stmt = stmt.where(CareLog.kind == kind)
     stmt = stmt.order_by(CareLog.started_at.desc())
 
-    return list(db.execute(stmt).scalars().all())
+    rows = list(db.execute(stmt).scalars().all())
+    return [_care_log_out(db, r) for r in rows]
 
 
 @router.post(
@@ -52,7 +61,7 @@ def create_care_log(
     payload: CareLogCreate,
     current_user: CurrentUser,
     db: DbSession,
-) -> CareLog:
+) -> CareLogOut:
     ensure_baby_access(db, current_user.id, baby_id)
 
     log = CareLog(
@@ -63,11 +72,12 @@ def create_care_log(
         amount_ml=payload.amount_ml,
         diaper_type=payload.diaper_type,
         note=payload.note,
+        created_by_user_id=current_user.id,
     )
     db.add(log)
     db.commit()
     db.refresh(log)
-    return log
+    return _care_log_out(db, log)
 
 
 @router.delete(

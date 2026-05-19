@@ -19,7 +19,7 @@ from app.models.baby_invite import BabyInvite
 from app.models.baby_member import BabyMember, BabyMemberRole
 from app.models.user import User
 from app.schemas.baby_invite import BabyInviteAcceptOut, BabyInviteOut
-from app.schemas.baby_member import BabyMemberOut
+from app.schemas.baby_member import BabyMemberOut, BabyMemberRelationshipUpdate
 
 
 INVITE_TTL_DAYS = 7
@@ -47,6 +47,8 @@ def _member_out(member: BabyMember, user: User) -> BabyMemberOut:
         user_name=user.name,
         user_email=user.email,
         role=member.role,
+        relationship=member.relationship,
+        relationship_label=member.relationship_label,
         created_at=member.created_at,
     )
 
@@ -70,6 +72,44 @@ def list_members(
         .order_by(BabyMember.created_at.asc())
     ).all()
     return [_member_out(m, u) for m, u in rows]
+
+
+@baby_router.patch(
+    "/members/me/relationship",
+    response_model=BabyMemberOut,
+    summary="Kendi aile ilişkimi belirle (anne / baba / bakıcı / büyükanne / büyükbaba / diğer)",
+)
+def update_my_relationship(
+    baby_id: int,
+    payload: BabyMemberRelationshipUpdate,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> BabyMemberOut:
+    ensure_baby_access(db, current_user.id, baby_id)
+    member = db.scalar(
+        select(BabyMember).where(
+            BabyMember.baby_id == baby_id,
+            BabyMember.user_id == current_user.id,
+        )
+    )
+    if member is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bu bebeğe üye değilsin.",
+        )
+    member.relationship = payload.relationship
+    # relationship_label sadece "other" için anlamlı; diğer durumlarda temizle
+    if payload.relationship and payload.relationship.value != "other":
+        member.relationship_label = None
+    else:
+        member.relationship_label = (
+            payload.relationship_label.strip()
+            if payload.relationship_label
+            else None
+        )
+    db.commit()
+    db.refresh(member)
+    return _member_out(member, current_user)
 
 
 @baby_router.delete(

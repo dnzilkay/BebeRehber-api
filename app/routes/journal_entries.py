@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.core import storage
+from app.core.audit import actor_for
 from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
 from app.core.limits import clamp_history_days_for_baby
@@ -43,7 +44,7 @@ def _get_owned_entry(db, user_id: int, baby_id: int, entry_id: int) -> JournalEn
     return entry
 
 
-def _media_out(m: MediaAsset) -> MediaAssetOut:
+def _media_out(db, m: MediaAsset) -> MediaAssetOut:
     return MediaAssetOut(
         id=m.id,
         entry_id=m.entry_id,
@@ -53,10 +54,11 @@ def _media_out(m: MediaAsset) -> MediaAssetOut:
         duration_sec=m.duration_sec,
         url=storage.public_url(m.object_key),
         created_at=m.created_at,
+        created_by=actor_for(db, m.entry.baby_id, m.created_by_user_id),
     )
 
 
-def _entry_out(entry: JournalEntry) -> JournalEntryOut:
+def _entry_out(db, entry: JournalEntry) -> JournalEntryOut:
     return JournalEntryOut(
         id=entry.id,
         baby_id=entry.baby_id,
@@ -65,7 +67,8 @@ def _entry_out(entry: JournalEntry) -> JournalEntryOut:
         body=entry.body,
         occurred_on=entry.occurred_on,
         created_at=entry.created_at,
-        media=[_media_out(m) for m in entry.media],
+        created_by=actor_for(db, entry.baby_id, entry.created_by_user_id),
+        media=[_media_out(db, m) for m in entry.media],
     )
 
 
@@ -100,7 +103,7 @@ def list_entries(
         stmt = stmt.limit(limit)
 
     rows = list(db.execute(stmt).scalars().all())
-    return [_entry_out(e) for e in rows]
+    return [_entry_out(db, e) for e in rows]
 
 
 @router.post(
@@ -124,11 +127,12 @@ def create_entry(
         title=payload.title.strip(),
         body=payload.body,
         occurred_on=payload.occurred_on,
+        created_by_user_id=current_user.id,
     )
     db.add(entry)
     db.commit()
     db.refresh(entry)
-    return _entry_out(entry)
+    return _entry_out(db, entry)
 
 
 @router.patch(
@@ -153,7 +157,7 @@ def update_entry(
 
     db.commit()
     db.refresh(entry)
-    return _entry_out(entry)
+    return _entry_out(db, entry)
 
 
 @router.delete(

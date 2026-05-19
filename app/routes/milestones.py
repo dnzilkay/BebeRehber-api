@@ -3,11 +3,23 @@ from datetime import date, timedelta
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
+from app.core.audit import actor_for
 from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
 from app.core.limits import clamp_history_days_for_baby
 from app.models.milestone import Milestone, MilestoneCategory
 from app.schemas.milestone import MilestoneCreate, MilestoneOut, MilestoneUpdate
+
+
+def _milestone_out(db, milestone: Milestone) -> MilestoneOut:
+    out = MilestoneOut.model_validate(milestone)
+    return out.model_copy(
+        update={
+            "created_by": actor_for(
+                db, milestone.baby_id, milestone.created_by_user_id
+            )
+        }
+    )
 
 
 router = APIRouter(prefix="/babies/{baby_id}/milestones", tags=["milestones"])
@@ -41,7 +53,7 @@ def list_milestones(
         le=365,
         description="Son N gün penceresi; plan tavanı uygulanır (Free 14 / Premium 365).",
     ),
-) -> list[Milestone]:
+) -> list[MilestoneOut]:
     ensure_baby_access(db, current_user.id, baby_id)
 
     stmt = select(Milestone).where(Milestone.baby_id == baby_id)
@@ -55,7 +67,8 @@ def list_milestones(
     if limit is not None:
         stmt = stmt.limit(limit)
 
-    return list(db.execute(stmt).scalars().all())
+    rows = list(db.execute(stmt).scalars().all())
+    return [_milestone_out(db, r) for r in rows]
 
 
 @router.post(
@@ -69,7 +82,7 @@ def create_milestone(
     payload: MilestoneCreate,
     current_user: CurrentUser,
     db: DbSession,
-) -> Milestone:
+) -> MilestoneOut:
     ensure_baby_access(db, current_user.id, baby_id)
 
     milestone = Milestone(
@@ -79,11 +92,12 @@ def create_milestone(
         category=payload.category,
         reached_on=payload.reached_on,
         note=payload.note,
+        created_by_user_id=current_user.id,
     )
     db.add(milestone)
     db.commit()
     db.refresh(milestone)
-    return milestone
+    return _milestone_out(db, milestone)
 
 
 @router.patch(
@@ -97,7 +111,7 @@ def update_milestone(
     payload: MilestoneUpdate,
     current_user: CurrentUser,
     db: DbSession,
-) -> Milestone:
+) -> MilestoneOut:
     milestone = _get_owned_milestone(db, current_user.id, baby_id, milestone_id)
 
     data = payload.model_dump(exclude_unset=True)
@@ -108,7 +122,7 @@ def update_milestone(
 
     db.commit()
     db.refresh(milestone)
-    return milestone
+    return _milestone_out(db, milestone)
 
 
 @router.delete(

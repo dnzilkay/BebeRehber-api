@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.security import hash_password
 from app.models.album import Album
 from app.models.baby import Baby, BabyGender
-from app.models.baby_member import BabyMember, BabyMemberRole
+from app.models.baby_member import BabyMember, BabyMemberRole, BabyRelationship
 from app.models.care_log import CareKind, CareLog, DiaperType
 from app.models.community_comment import CommunityComment
 from app.models.community_post import CommunityCategory, CommunityPost
@@ -89,6 +89,48 @@ def _get_user(db: Session, email: str) -> User | None:
     return db.execute(select(User).where(User.email == email)).scalar_one_or_none()
 
 
+def _set_owner_relationship(
+    db: Session, baby_id: int, user_id: int, rel: BabyRelationship
+) -> None:
+    """Mevcut owner BabyMember'a relationship ata (idempotent)."""
+    member = db.scalar(
+        select(BabyMember).where(
+            BabyMember.baby_id == baby_id,
+            BabyMember.user_id == user_id,
+        )
+    )
+    if member is None or member.relationship is not None:
+        return
+    member.relationship = rel
+    db.commit()
+
+
+def _ensure_co_parent(
+    db: Session, baby_id: int, user_id: int, rel: BabyRelationship
+) -> None:
+    """Co-parent BabyMember yoksa ekle, relationship belirle (idempotent)."""
+    existing = db.scalar(
+        select(BabyMember).where(
+            BabyMember.baby_id == baby_id,
+            BabyMember.user_id == user_id,
+        )
+    )
+    if existing is not None:
+        if existing.relationship is None:
+            existing.relationship = rel
+            db.commit()
+        return
+    db.add(
+        BabyMember(
+            baby_id=baby_id,
+            user_id=user_id,
+            role=BabyMemberRole.CO_PARENT,
+            relationship=rel,
+        )
+    )
+    db.commit()
+
+
 def _utc(year: int, month: int, day: int, hour: int = 0, minute: int = 0) -> datetime:
     return datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
 
@@ -117,27 +159,39 @@ def seed_demo_data(db: Session) -> dict[str, int]:
 
     deniz = _get_user(db, "deniz@example.com")
     admin = _get_user(db, "admin@example.com")
+    mehmet = _get_user(db, "mehmet@example.com")
 
     if deniz is not None:
         baby, created_baby = _ensure_deniz_baby(db, deniz)
         if baby is not None:
             if created_baby:
                 stats["babies"] += 1
-            stats["care_logs"] += _ensure_care_logs(db, baby)
-            stats["milestones"] += _ensure_milestones(db, baby)
-            stats["reminders"] += _ensure_reminders(db, baby)
-            album_n, entry_n = _ensure_journal(db, baby)
+            # Owner relationship = ANNE (Deniz)
+            _set_owner_relationship(db, baby.id, deniz.id, BabyRelationship.MOTHER)
+            stats["care_logs"] += _ensure_care_logs(db, baby, author_id=deniz.id)
+            stats["milestones"] += _ensure_milestones(db, baby, author_id=deniz.id)
+            stats["reminders"] += _ensure_reminders(db, baby, author_id=deniz.id)
+            album_n, entry_n = _ensure_journal(db, baby, author_id=deniz.id)
             stats["albums"] += album_n
             stats["journal_entries"] += entry_n
+
+            # Mehmet'i Ada'ya BABA olarak co-parent ekle (demo)
+            if mehmet is not None:
+                _ensure_co_parent(db, baby.id, mehmet.id, BabyRelationship.FATHER)
 
         # İkinci bebek: Cem (yenidoğan, ~2 aylık) — BabySwitcher + farklı yaş
         cem, created_cem = _ensure_deniz_baby_cem(db, deniz)
         if cem is not None:
             if created_cem:
                 stats["babies"] += 1
-            stats["care_logs"] += _ensure_newborn_care_logs(db, cem)
-            stats["milestones"] += _ensure_newborn_milestones(db, cem)
-            stats["reminders"] += _ensure_newborn_reminders(db, cem)
+            _set_owner_relationship(db, cem.id, deniz.id, BabyRelationship.MOTHER)
+            stats["care_logs"] += _ensure_newborn_care_logs(db, cem, author_id=deniz.id)
+            stats["milestones"] += _ensure_newborn_milestones(
+                db, cem, author_id=deniz.id
+            )
+            stats["reminders"] += _ensure_newborn_reminders(db, cem, author_id=deniz.id)
+            if mehmet is not None:
+                _ensure_co_parent(db, cem.id, mehmet.id, BabyRelationship.FATHER)
 
     if admin is not None:
         stats["community_posts"] = _ensure_community_posts(db, admin)
@@ -210,7 +264,9 @@ def _ensure_deniz_baby_cem(db: Session, deniz: User) -> tuple[Baby | None, bool]
     return baby, True
 
 
-def _ensure_newborn_care_logs(db: Session, baby: Baby) -> int:
+def _ensure_newborn_care_logs(
+    db: Session, baby: Baby, author_id: int | None = None
+) -> int:
     """Yenidoğan pattern (Cem için): son 7 gün, sık besleme + uzun uyku."""
     existing = db.scalar(select(CareLog).where(CareLog.baby_id == baby.id).limit(1))
     if existing is not None:
@@ -289,12 +345,17 @@ def _ensure_newborn_care_logs(db: Session, baby: Baby) -> int:
                 )
             )
 
+    if author_id is not None:
+        for r in rows:
+            r.created_by_user_id = author_id
     db.add_all(rows)
     db.commit()
     return len(rows)
 
 
-def _ensure_newborn_milestones(db: Session, baby: Baby) -> int:
+def _ensure_newborn_milestones(
+    db: Session, baby: Baby, author_id: int | None = None
+) -> int:
     """Cem için 1-2 yaşa uygun milestone (sosyal gülümseme, baş tutma erken)."""
     existing = db.scalar(select(Milestone).where(Milestone.baby_id == baby.id).limit(1))
     if existing is not None:
@@ -317,12 +378,17 @@ def _ensure_newborn_milestones(db: Session, baby: Baby) -> int:
             reached_on=today - timedelta(days=4),
         ),
     ]
+    if author_id is not None:
+        for r in rows:
+            r.created_by_user_id = author_id
     db.add_all(rows)
     db.commit()
     return len(rows)
 
 
-def _ensure_newborn_reminders(db: Session, baby: Baby) -> int:
+def _ensure_newborn_reminders(
+    db: Session, baby: Baby, author_id: int | None = None
+) -> int:
     existing = db.scalar(select(Reminder).where(Reminder.baby_id == baby.id).limit(1))
     if existing is not None:
         return 0
@@ -359,6 +425,9 @@ def _ensure_newborn_reminders(db: Session, baby: Baby) -> int:
             note="Kuru ve temiz kaldı mı?",
         ),
     ]
+    if author_id is not None:
+        for r in rows:
+            r.created_by_user_id = author_id
     db.add_all(rows)
     db.commit()
     return len(rows)
@@ -367,7 +436,7 @@ def _ensure_newborn_reminders(db: Session, baby: Baby) -> int:
 # --------------------------- Care logs ---------------------------
 
 
-def _ensure_care_logs(db: Session, baby: Baby) -> int:
+def _ensure_care_logs(db: Session, baby: Baby, author_id: int | None = None) -> int:
     """Ada için 30 günlük gerçekçi bakım pattern'i (uyku/besleme/bez).
 
     Her gün küçük varyasyonlarla; Premium 30 günlük analiz seçeneği zengin
@@ -465,6 +534,9 @@ def _ensure_care_logs(db: Session, baby: Baby) -> int:
                 )
             )
 
+    if author_id is not None:
+        for r in rows:
+            r.created_by_user_id = author_id
     db.add_all(rows)
     db.commit()
     return len(rows)
@@ -473,7 +545,7 @@ def _ensure_care_logs(db: Session, baby: Baby) -> int:
 # --------------------------- Milestones ---------------------------
 
 
-def _ensure_milestones(db: Session, baby: Baby) -> int:
+def _ensure_milestones(db: Session, baby: Baby, author_id: int | None = None) -> int:
     existing = db.scalar(select(Milestone).where(Milestone.baby_id == baby.id).limit(1))
     if existing is not None:
         return 0
@@ -545,6 +617,9 @@ def _ensure_milestones(db: Session, baby: Baby) -> int:
         )
         for (preset_id, title, cat, reached) in items
     ]
+    if author_id is not None:
+        for r in rows:
+            r.created_by_user_id = author_id
     db.add_all(rows)
     db.commit()
     return len(rows)
@@ -553,7 +628,7 @@ def _ensure_milestones(db: Session, baby: Baby) -> int:
 # --------------------------- Reminders ---------------------------
 
 
-def _ensure_reminders(db: Session, baby: Baby) -> int:
+def _ensure_reminders(db: Session, baby: Baby, author_id: int | None = None) -> int:
     existing = db.scalar(select(Reminder).where(Reminder.baby_id == baby.id).limit(1))
     if existing is not None:
         return 0
@@ -613,6 +688,9 @@ def _ensure_reminders(db: Session, baby: Baby) -> int:
             note="Doğal ışıkta park — sage ton ağırlıklı kıyafet",
         ),
     ]
+    if author_id is not None:
+        for r in rows:
+            r.created_by_user_id = author_id
     db.add_all(rows)
     db.commit()
     return len(rows)
@@ -621,7 +699,9 @@ def _ensure_reminders(db: Session, baby: Baby) -> int:
 # --------------------------- Journal ---------------------------
 
 
-def _ensure_journal(db: Session, baby: Baby) -> tuple[int, int]:
+def _ensure_journal(
+    db: Session, baby: Baby, author_id: int | None = None
+) -> tuple[int, int]:
     existing = db.scalar(select(Album).where(Album.baby_id == baby.id).limit(1))
     if existing is not None:
         return (0, 0)
@@ -685,6 +765,11 @@ def _ensure_journal(db: Session, baby: Baby) -> tuple[int, int]:
             occurred_on=date(2026, 5, 1),
         ),
     ]
+    if author_id is not None:
+        for a in (album_ilk_yil, album_aile, album_gezi):
+            a.created_by_user_id = author_id
+        for e in entries:
+            e.created_by_user_id = author_id
     db.add_all(entries)
     db.commit()
     return (3, len(entries))

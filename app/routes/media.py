@@ -5,6 +5,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from sqlalchemy import func, select
 
 from app.core import storage, video
+from app.core.audit import actor_for
 from app.core.baby_access import ensure_baby_access
 from app.core.deps import CurrentUser, DbSession
 from app.core.limits import (
@@ -43,7 +44,7 @@ def _kind_for(content_type: str) -> MediaKind:
     )
 
 
-def _media_out(m: MediaAsset) -> MediaAssetOut:
+def _media_out(db, m: MediaAsset, baby_id: int) -> MediaAssetOut:
     return MediaAssetOut(
         id=m.id,
         entry_id=m.entry_id,
@@ -53,6 +54,7 @@ def _media_out(m: MediaAsset) -> MediaAssetOut:
         duration_sec=m.duration_sec,
         url=storage.public_url(m.object_key),
         created_at=m.created_at,
+        created_by=actor_for(db, baby_id, m.created_by_user_id),
     )
 
 
@@ -150,11 +152,12 @@ async def upload_media(
         content_type=content_type,
         size_bytes=len(data),
         duration_sec=duration_sec,
+        created_by_user_id=current_user.id,
     )
     db.add(media)
     db.commit()
     db.refresh(media)
-    return _media_out(media)
+    return _media_out(db, media, baby_id)
 
 
 @router.delete(

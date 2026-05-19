@@ -84,7 +84,11 @@ def create_album(
                 ),
             )
 
-    album = Album(baby_id=baby_id, name=payload.name.strip())
+    album = Album(
+        baby_id=baby_id,
+        name=payload.name.strip(),
+        created_by_user_id=current_user.id,
+    )
     db.add(album)
     db.commit()
     db.refresh(album)

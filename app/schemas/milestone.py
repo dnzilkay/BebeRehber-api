@@ -3,6 +3,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.milestone import MilestoneCategory
+from app.schemas.audit import ActorOut
 
 
 class MilestoneBase(BaseModel):
@@ -28,5 +29,6 @@ class MilestoneOut(MilestoneBase):
     id: int
     baby_id: int
     created_at: datetime
+    created_by: ActorOut | None = None
 
     model_config = ConfigDict(from_attributes=True)
