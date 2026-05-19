@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.reminder import ReminderKind
+from app.schemas.audit import ActorOut
 
 
 class ReminderBase(BaseModel):
@@ -29,5 +30,6 @@ class ReminderOut(ReminderBase):
     baby_id: int
     completed_at: datetime | None
     created_at: datetime
+    created_by: ActorOut | None = None
 
     model_config = ConfigDict(from_attributes=True)

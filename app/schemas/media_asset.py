@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 from app.models.media_asset import MediaKind
+from app.schemas.audit import ActorOut
 
 
 class MediaAssetOut(BaseModel):
@@ -14,5 +15,6 @@ class MediaAssetOut(BaseModel):
     duration_sec: int | None
     url: str
     created_at: datetime
+    created_by: ActorOut | None = None
 
     model_config = ConfigDict(from_attributes=True)

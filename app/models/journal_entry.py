@@ -24,6 +24,11 @@ class JournalEntry(Base):
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
     occurred_on: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
