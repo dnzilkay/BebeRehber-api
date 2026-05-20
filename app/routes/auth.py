@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from app.core.config import settings
@@ -11,6 +12,10 @@ from app.core.security import (
 from app.models.user import User
 from app.schemas.auth import LoginInput, TokenOut
 from app.schemas.user import UserCreate, UserOut
+
+
+class ProfileUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -87,4 +92,20 @@ def login(payload: LoginInput, db: DbSession) -> TokenOut:
     summary="Mevcut kullanıcının profili",
 )
 def me(current_user: CurrentUser) -> User:
+    return current_user
+
+
+@router.patch(
+    "/me",
+    response_model=UserOut,
+    summary="Profil adını güncelle",
+)
+def update_me(
+    payload: ProfileUpdate,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> User:
+    current_user.name = payload.name.strip()
+    db.commit()
+    db.refresh(current_user)
     return current_user
