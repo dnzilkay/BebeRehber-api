@@ -9,7 +9,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.models.user import User
+from app.models.user import User, UserPlan
 from app.schemas.auth import LoginInput, TokenOut
 from app.schemas.user import UserCreate, UserOut
 
@@ -108,4 +108,36 @@ def update_me(
     current_user.name = payload.name.strip()
     db.commit()
     db.refresh(current_user)
+    return current_user
+
+
+@router.post(
+    "/upgrade",
+    response_model=UserOut,
+    summary="Hesabı Premium plana yükselt (dönem projesi — sahte ödeme)",
+)
+def upgrade_to_premium(
+    current_user: CurrentUser,
+    db: DbSession,
+) -> User:
+    if current_user.plan != UserPlan.PREMIUM:
+        current_user.plan = UserPlan.PREMIUM
+        db.commit()
+        db.refresh(current_user)
+    return current_user
+
+
+@router.post(
+    "/downgrade",
+    response_model=UserOut,
+    summary="Hesabı Free plana indir (dönem projesi — test amaçlı)",
+)
+def downgrade_to_free(
+    current_user: CurrentUser,
+    db: DbSession,
+) -> User:
+    if current_user.plan != UserPlan.FREE:
+        current_user.plan = UserPlan.FREE
+        db.commit()
+        db.refresh(current_user)
     return current_user
