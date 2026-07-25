@@ -15,9 +15,7 @@ def _reminder_out(db, reminder: Reminder) -> ReminderOut:
     out = ReminderOut.model_validate(reminder)
     return out.model_copy(
         update={
-            "created_by": actor_for(
-                db, reminder.baby_id, reminder.created_by_user_id
-            )
+            "created_by": actor_for(db, reminder.baby_id, reminder.created_by_user_id)
         }
     )
 

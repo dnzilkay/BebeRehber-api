@@ -82,9 +82,7 @@ class BabyMember(Base):
         nullable=True,
     )
     # Sadece relationship=other ise dolar; "Vaftiz annesi" gibi.
-    relationship_label: Mapped[str | None] = mapped_column(
-        String(60), nullable=True
-    )
+    relationship_label: Mapped[str | None] = mapped_column(String(60), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
