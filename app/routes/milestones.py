@@ -15,9 +15,7 @@ def _milestone_out(db, milestone: Milestone) -> MilestoneOut:
     out = MilestoneOut.model_validate(milestone)
     return out.model_copy(
         update={
-            "created_by": actor_for(
-                db, milestone.baby_id, milestone.created_by_user_id
-            )
+            "created_by": actor_for(db, milestone.baby_id, milestone.created_by_user_id)
         }
     )
 

@@ -103,9 +103,7 @@ def update_my_relationship(
         member.relationship_label = None
     else:
         member.relationship_label = (
-            payload.relationship_label.strip()
-            if payload.relationship_label
-            else None
+            payload.relationship_label.strip() if payload.relationship_label else None
         )
     db.commit()
     db.refresh(member)

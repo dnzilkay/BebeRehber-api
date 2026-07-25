@@ -15,9 +15,7 @@ from app.models.user import User
 from app.schemas.audit import ActorOut
 
 
-def actor_for(
-    db: Session, baby_id: int, user_id: int | None
-) -> ActorOut | None:
+def actor_for(db: Session, baby_id: int, user_id: int | None) -> ActorOut | None:
     """Kullanıcı + bebek-bağlamlı ilişki bilgisi ile ActorOut döndür.
 
     `user_id` None ise (kayıt eski / kaydedenin hesabı silinmiş) None döner.
